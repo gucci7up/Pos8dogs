@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:pos/layouts/main_layout.dart';
+import 'package:pos/screens/login_screen.dart';
 import 'package:pos/screens/jugada_screen.dart';
 import 'package:pos/screens/resultados_screen.dart';
 import 'package:pos/screens/cuotas_screen.dart';
@@ -51,8 +52,27 @@ class RacingDogsApp extends StatelessWidget {
           surface: Colors.black,
         ),
       ),
-      home: const MainScreen(),
+      home: const RootScreen(),
     );
+  }
+}
+
+class RootScreen extends StatefulWidget {
+  const RootScreen({super.key});
+
+  @override
+  State<RootScreen> createState() => _RootScreenState();
+}
+
+class _RootScreenState extends State<RootScreen> {
+  bool _loggedIn = false;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_loggedIn) {
+      return LoginScreen(onAccess: () => setState(() => _loggedIn = true));
+    }
+    return const MainScreen();
   }
 }
 
