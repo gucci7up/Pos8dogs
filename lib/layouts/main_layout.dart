@@ -1,9 +1,21 @@
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:window_manager/window_manager.dart';
 import 'package:pos/layouts/desktop_layout.dart';
 import 'package:pos/widgets/race_info_panel.dart';
 import 'package:pos/widgets/right_panel.dart';
 import 'package:pos/widgets/top_navigation.dart';
+import 'package:pos/widgets/window_controls.dart';
 import 'package:pos/state/pos_state.dart';
+
+bool get _isDesktopWindow =>
+    !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
+
+// Permite arrastrar la ventana sin bordes desde el header (solo desktop)
+Widget _dragArea(Widget child) {
+  return _isDesktopWindow ? DragToMoveArea(child: child) : child;
+}
 
 class MainLayout extends StatelessWidget {
   final int currentTabIndex;
@@ -45,14 +57,16 @@ class MainLayout extends StatelessWidget {
                     children: [
                       // Logo
                       Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.only(left: 16.0),
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: Image.asset(
-                              'assets/resources/logo_principal.png',
-                              height: 90,
-                              fit: BoxFit.contain,
+                        child: _dragArea(
+                          Padding(
+                            padding: const EdgeInsets.only(left: 16.0),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Image.asset(
+                                'assets/resources/logo_principal.png',
+                                height: 90,
+                                fit: BoxFit.contain,
+                              ),
                             ),
                           ),
                         ),
@@ -62,9 +76,11 @@ class MainLayout extends StatelessWidget {
                         currentIndex: currentTabIndex,
                         onTabChanged: onTabChanged,
                       ),
-                      const Expanded(child: SizedBox()),
+                      Expanded(child: _dragArea(const SizedBox(height: 90))),
                       // Right Panel (Settings)
                       RightPanel(state: state),
+                      // Window controls (minimize/maximize/close)
+                      const WindowControls(),
                     ],
                   ),
                   const SizedBox(height: 8),

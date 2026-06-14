@@ -20,7 +20,7 @@ class DesktopLayout extends StatelessWidget {
         behavior: DesktopScrollBehavior(),
         child: Center(
           child: FittedBox(
-            fit: BoxFit.contain,
+            fit: BoxFit.cover,
             child: SizedBox(
               width: 1920,
               height: 1080,
