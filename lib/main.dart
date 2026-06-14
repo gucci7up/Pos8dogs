@@ -22,7 +22,8 @@ void main() async {
       center: true,
       backgroundColor: Colors.transparent,
       skipTaskbar: false,
-      titleBarStyle: TitleBarStyle.hidden, // borderless native POS style
+      titleBarStyle:
+          TitleBarStyle.hidden, // sin bordes; barra propia en DesktopLayout
     );
 
     windowManager.waitUntilReadyToShow(windowOptions, () async {

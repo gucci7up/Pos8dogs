@@ -58,31 +58,63 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return DesktopLayout(
-      child: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0, -0.4),
-            radius: 1.3,
-            colors: [Color(0xFF1E4D8C), Color(0xFF081A40)],
+      child: Stack(
+        children: [
+          // Fondo de marca
+          Positioned.fill(
+            child: Image.asset(
+              'assets/resources/background_login.png',
+              fit: BoxFit.cover,
+            ),
           ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(60, 60, 60, 0),
-          child: Column(
-            children: [
-              Expanded(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      flex: 3,
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: 20),
+          // Franja inferior con imágenes de carreras
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: SizedBox(
+              height: 220,
+              width: double.infinity,
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: Image.asset(
+                      'assets/resources/games_img.png',
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: Container(
+                      height: 2,
+                      color: const Color(0xFFD4AF37).withOpacity(0.6),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          // Contenido principal
+          Padding(
+            padding: const EdgeInsets.fromLTRB(90, 30, 90, 240),
+            child: Column(
+              children: [
+                Image.asset('assets/resources/logo_principal.png', height: 240),
+                const SizedBox(height: 30),
+                Expanded(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        flex: 3,
                         child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            const _FieldLabel('NÚMERO DE ACCESO'),
+                            const SizedBox(height: 12),
                             Row(
                               children: [
                                 Expanded(
@@ -95,11 +127,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ),
                                   ),
                                 ),
-                                const SizedBox(width: 24),
+                                const SizedBox(width: 20),
                                 _ClearButton(onTap: _clearAccount),
                               ],
                             ),
-                            const SizedBox(height: 32),
+                            const SizedBox(height: 36),
+                            const _FieldLabel('PIN DE ACCESO'),
+                            const SizedBox(height: 12),
                             Row(
                               children: [
                                 Expanded(
@@ -112,70 +146,50 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ),
                                   ),
                                 ),
-                                const SizedBox(width: 24),
+                                const SizedBox(width: 20),
                                 _ClearButton(onTap: _clearPassword),
                               ],
                             ),
-                            const SizedBox(height: 60),
+                            const SizedBox(height: 56),
                             _AccesoButton(onTap: widget.onAccess),
                           ],
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 60),
-                    Expanded(
-                      flex: 2,
-                      child: Column(
-                        children: [
-                          Expanded(
-                            child: _NumPad(
-                              onDigit: _typeDigit,
-                              onBackspace: _backspace,
-                            ),
-                          ),
-                          const SizedBox(height: 28),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: Image.asset(
-                              'assets/resources/ds_logo_login.png',
-                              height: 64,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // Bottom image strip with version number
-              SizedBox(
-                height: 160,
-                width: double.infinity,
-                child: Stack(
-                  children: [
-                    Positioned.fill(
-                      child: Image.asset(
-                        'assets/resources/games_img.png',
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                    Positioned(
-                      left: 16,
-                      bottom: 8,
-                      child: Text(
-                        '2.51.00',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.6),
-                          fontSize: 16,
+                      const SizedBox(width: 70),
+                      Expanded(
+                        flex: 2,
+                        child: _NumPad(
+                          onDigit: _typeDigit,
+                          onBackspace: _backspace,
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
+        ],
+      ),
+    );
+  }
+
+}
+
+class _FieldLabel extends StatelessWidget {
+  final String text;
+
+  const _FieldLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: const TextStyle(
+        color: Color(0xFFD4AF37),
+        fontSize: 18,
+        fontWeight: FontWeight.bold,
+        letterSpacing: 4,
       ),
     );
   }
@@ -199,26 +213,37 @@ class _LoginField extends StatelessWidget {
     final display = isPassword ? '•' * text.length : text;
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        height: 76,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        height: 78,
         padding: const EdgeInsets.symmetric(horizontal: 28),
         alignment: Alignment.centerLeft,
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(6),
+          color: const Color(0xFF0F2138).withOpacity(0.6),
+          borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: isActive ? const Color(0xFFD4AF37) : Colors.transparent,
-            width: 3,
+            color: isActive
+                ? const Color(0xFFD4AF37)
+                : const Color(0xFFD4AF37).withOpacity(0.45),
+            width: isActive ? 2.5 : 1.5,
           ),
+          boxShadow: isActive
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFFD4AF37).withOpacity(0.35),
+                    blurRadius: 14,
+                    spreadRadius: 1,
+                  ),
+                ]
+              : null,
         ),
         child: Text(
           display,
           style: TextStyle(
-            fontSize: 30,
-            fontStyle: isPassword ? FontStyle.normal : FontStyle.italic,
-            letterSpacing: isPassword ? 6 : 1,
+            fontSize: 32,
+            letterSpacing: isPassword ? 8 : 2,
             fontWeight: FontWeight.w600,
-            color: const Color(0xFF1A1A3A),
+            color: Colors.white,
           ),
         ),
       ),
@@ -246,10 +271,30 @@ class _ClearButtonState extends State<_ClearButton> {
       onExit: (_) => setState(() => _isHovered = false),
       child: GestureDetector(
         onTap: widget.onTap,
-        child: AnimatedScale(
-          scale: _isHovered ? 1.05 : 1.0,
+        child: AnimatedContainer(
           duration: const Duration(milliseconds: 100),
-          child: Image.asset('assets/resources/imagenx.png', height: 60),
+          width: 78,
+          height: 78,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: _isHovered
+                  ? [const Color(0xFFA8362C), const Color(0xFF7A1F1F)]
+                  : [const Color(0xFF8E2A22), const Color(0xFF601717)],
+            ),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.white.withOpacity(0.15)),
+          ),
+          child: const Text(
+            'X',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
         ),
       ),
     );
@@ -270,36 +315,58 @@ class _AccesoButtonState extends State<_AccesoButton> {
 
   @override
   Widget build(BuildContext context) {
-    final bgAsset = _isHovered
-        ? 'assets/resources/butt_login_hov.png'
-        : 'assets/resources/butt_login.png';
-
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
       child: GestureDetector(
         onTap: widget.onTap,
-        child: Container(
-          width: 320,
-          height: 76,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            image: DecorationImage(
-              image: AssetImage(bgAsset),
-              fit: BoxFit.fill,
+        child: Row(
+          children: [
+            // Cuadro dorado con icono de candado
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 120),
+              width: 78,
+              height: 78,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: _isHovered
+                      ? [const Color(0xFFE6C75B), const Color(0xFFB8902C)]
+                      : [const Color(0xFFD4AF37), const Color(0xFFA67C1F)],
+                ),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.lock, color: Color(0xFF12241A), size: 34),
             ),
-          ),
-          child: const Text(
-            'ACCESO',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 28,
-              fontStyle: FontStyle.italic,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1,
+            const SizedBox(width: 12),
+            // Botón ACCESO
+            Expanded(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 120),
+                height: 78,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: const Color(
+                    0xFF0F2138,
+                  ).withOpacity(_isHovered ? 0.85 : 0.6),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFD4AF37), width: 2),
+                ),
+                child: const Text(
+                  'ACCESO',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 6,
+                  ),
+                ),
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -314,7 +381,7 @@ class _NumPad extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const spacing = 16.0;
+    const spacing = 18.0;
     return Column(
       children: [
         Expanded(
@@ -378,8 +445,7 @@ class _NumPad extends StatelessWidget {
                 flex: 2,
                 child: _NumKey(
                   icon: Icons.arrow_back,
-                  color: const Color(0xFFB7281E),
-                  iconColor: Colors.white,
+                  highlighted: true,
                   onTap: onBackspace,
                 ),
               ),
@@ -399,15 +465,13 @@ class _NumPad extends StatelessWidget {
 class _NumKey extends StatefulWidget {
   final String? label;
   final IconData? icon;
-  final Color? color;
-  final Color? iconColor;
+  final bool highlighted;
   final VoidCallback onTap;
 
   const _NumKey({
     this.label,
     this.icon,
-    this.color,
-    this.iconColor,
+    this.highlighted = false,
     required this.onTap,
   });
 
@@ -420,27 +484,51 @@ class _NumKeyState extends State<_NumKey> {
 
   @override
   Widget build(BuildContext context) {
-    final baseColor = widget.color ?? const Color(0xFFE6E6E6);
+    final BoxDecoration decoration;
+    final Color contentColor;
+
+    if (widget.highlighted) {
+      decoration = BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: _isHovered
+              ? [const Color(0xFFE6C75B), const Color(0xFFB8902C)]
+              : [const Color(0xFFD4AF37), const Color(0xFFA67C1F)],
+        ),
+        borderRadius: BorderRadius.circular(10),
+      );
+      contentColor = const Color(0xFF12241A);
+    } else {
+      decoration = BoxDecoration(
+        color: Colors.white.withOpacity(_isHovered ? 0.12 : 0.05),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: const Color(0xFFD4AF37).withOpacity(_isHovered ? 0.7 : 0.35),
+          width: 1.5,
+        ),
+      );
+      contentColor = Colors.white;
+    }
+
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
       child: GestureDetector(
         onTap: widget.onTap,
-        child: Container(
-          decoration: BoxDecoration(
-            color: _isHovered ? baseColor.withOpacity(0.8) : baseColor,
-            borderRadius: BorderRadius.circular(6),
-          ),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 100),
+          decoration: decoration,
           alignment: Alignment.center,
           child: widget.icon != null
-              ? Icon(widget.icon, color: widget.iconColor, size: 30)
+              ? Icon(widget.icon, color: contentColor, size: 32)
               : Text(
                   widget.label!,
-                  style: const TextStyle(
-                    fontSize: 34,
+                  style: TextStyle(
+                    fontSize: 36,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF1A1A3A),
+                    color: contentColor,
                   ),
                 ),
         ),
