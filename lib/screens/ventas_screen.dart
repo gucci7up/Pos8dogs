@@ -65,9 +65,14 @@ class _VentasScreenState extends State<VentasScreen> {
   Widget build(BuildContext context) {
     final filtered = _filtered();
 
-    final monto   = filtered.fold(0.0, (s, t) => s + t.amount);
-    final pagar   = filtered.fold(0.0, (s, t) => s + t.pay);
+    // Cuadre de caja: los ANULADOS no cuentan como venta (fueron reembolsados)
+    // y "Pagar" es solo el efectivo realmente pagado (premios PAGADOS).
+    final activos = filtered.where((t) => t.status != TicketStatus.annulled).toList();
+    final anulados = filtered.where((t) => t.status == TicketStatus.annulled).toList();
+    final monto   = activos.fold(0.0, (s, t) => s + t.amount);
+    final pagar   = filtered.where((t) => t.status == TicketStatus.paid).fold(0.0, (s, t) => s + t.pay);
     final balance = monto - pagar;
+    final anuladosMonto = anulados.fold(0.0, (s, t) => s + t.amount);
 
     return Container(
       padding: const EdgeInsets.only(left: 48.0, right: 48.0, top: 16.0, bottom: 24.0),
@@ -300,10 +305,10 @@ class _VentasScreenState extends State<VentasScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      _buildSummaryItem('Jugadas', '${filtered.length}'),
+                      _buildSummaryItem('Tickets', '${activos.length}'),
                       _buildSummaryItem('Monto', monto.toStringAsFixed(2)),
-                      _buildSummaryItem('Inversión', monto.toStringAsFixed(2)),
-                      _buildSummaryItem('Pagar', pagar.toStringAsFixed(2)),
+                      _buildSummaryItem('Pagado', pagar.toStringAsFixed(2)),
+                      _buildSummaryItem('Anulados', '${anulados.length} · ${anuladosMonto.toStringAsFixed(2)}'),
                       _buildSummaryItem('Balance', balance.toStringAsFixed(2)),
                     ],
                   ),

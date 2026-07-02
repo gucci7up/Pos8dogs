@@ -458,6 +458,8 @@ class PosState extends ChangeNotifier {
       _addAmountToLastPlay(amount);
       return;
     }
+    // Solo fija el monto. Con la selección + monto, el cajero decide la acción:
+    // AGREGAR JUGADA (GANADOR por cada perro de la fila 1°), o R / R2 / reverse / combinar.
     _currentBetAmount += amount;
     notifyListeners();
   }
