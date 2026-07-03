@@ -8,6 +8,9 @@ class RaceInfoPanel extends StatelessWidget {
   final int x2Dog;
   final int x3Dog;
   final double jackpotAmount;
+  final double jackpotMega;
+  final double exactaBonusPool;
+  final String bonusExacta;
   final bool salesLimitEnabled;
   final double salesRemaining;
   final double salesLimit;
@@ -22,6 +25,9 @@ class RaceInfoPanel extends StatelessWidget {
     this.x2Dog = 0,
     this.x3Dog = 0,
     this.jackpotAmount = 0.0,
+    this.jackpotMega = 0.0,
+    this.exactaBonusPool = 0.0,
+    this.bonusExacta = '',
     this.salesLimitEnabled = false,
     this.salesRemaining = 0.0,
     this.salesLimit = 0.0,
@@ -190,33 +196,37 @@ class RaceInfoPanel extends StatelessWidget {
           ),
           const SizedBox(width: 24),
 
-          // Jackpot counter
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'JACKPOT',
-                style: TextStyle(
-                  fontFamily: 'DinNextLtPro',
-                  color: Color(0xFFB0A261),
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.2,
-                ),
+          // Jackpot BIG
+          _PotCounter(label: 'JACKPOT BIG', amount: jackpotAmount, color: const Color(0xFFD4AF37)),
+          const SizedBox(width: 20),
+          // Jackpot MEGA
+          _PotCounter(label: 'MEGA', amount: jackpotMega, color: const Color(0xFF7E57C2)),
+          const SizedBox(width: 20),
+          // Bonus Exacta (pozo)
+          _PotCounter(label: 'BONUS', amount: exactaBonusPool, color: const Color(0xFF26A69A)),
+
+          // Badge de la exacta sorteada esta carrera
+          if (bonusExacta.isNotEmpty) ...[
+            const SizedBox(width: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: const Color(0xFF26A69A),
+                borderRadius: BorderRadius.circular(8),
+                boxShadow: const [BoxShadow(color: Color(0xFF26A69A), blurRadius: 6, spreadRadius: 1)],
               ),
-              const SizedBox(height: 2),
-              Text(
-                '\$${jackpotAmount.toStringAsFixed(2)}',
+              child: Text(
+                'BONUS $bonusExacta',
                 style: const TextStyle(
                   fontFamily: 'DinNextLtPro',
-                  color: Color(0xFFD4AF37),
-                  fontSize: 18,
+                  color: Colors.white,
+                  fontSize: 14,
                   fontWeight: FontWeight.bold,
+                  letterSpacing: 0.5,
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
 
           // Cuadro de SALDO DISPONIBLE — cuenta en descenso hacia cero
           if (salesLimitEnabled) ...[
@@ -239,6 +249,45 @@ class RaceInfoPanel extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+/// Contador de un pozo (jackpot BIG/MEGA o bonus) para el header.
+class _PotCounter extends StatelessWidget {
+  final String label;
+  final double amount;
+  final Color color;
+
+  const _PotCounter({required this.label, required this.amount, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontFamily: 'DinNextLtPro',
+            color: Color(0xFFB0A261),
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.2,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          '\$${amount.toStringAsFixed(2)}',
+          style: TextStyle(
+            fontFamily: 'DinNextLtPro',
+            color: color,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
     );
   }
 }

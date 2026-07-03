@@ -232,9 +232,19 @@ class PosState extends ChangeNotifier {
   int _x3Dog = 0;
   int get x3Dog => _x3Dog;
 
-  // Jackpot: monto acumulado en el pozo (en vivo desde el backend)
+  // Jackpot BIG: monto acumulado en el pozo (en vivo desde el backend)
   double _jackpotAmount = 0.0;
   double get jackpotAmount => _jackpotAmount;
+
+  // Jackpot Mega: segundo pozo (ventana 100k-120k)
+  double _jackpotMega = 0.0;
+  double get jackpotMega => _jackpotMega;
+
+  // Bonus de exacta: pozo acumulado + exacta sorteada esta carrera (ej. "3-5")
+  double _exactaBonusPool = 0.0;
+  double get exactaBonusPool => _exactaBonusPool;
+  String _bonusExacta = '';
+  String get bonusExacta => _bonusExacta;
 
   // Límite de venta del POS por agencia (efectivo neto). Viene del backend.
   bool _salesLimitEnabled = false;
@@ -343,11 +353,21 @@ class PosState extends ChangeNotifier {
         }
       }
 
-      // Jackpot: actualizar monto acumulado desde el status global
+      // Jackpots (BIG + Mega) y bonus de exacta desde el status por agencia
       final jackpotRaw = status['jackpotAmount'];
       if (jackpotRaw != null) {
         _jackpotAmount = double.tryParse(jackpotRaw.toString()) ?? _jackpotAmount;
       }
+      final megaRaw = status['jackpotMega'];
+      if (megaRaw != null) {
+        _jackpotMega = double.tryParse(megaRaw.toString()) ?? _jackpotMega;
+      }
+      final bonusPoolRaw = status['exactaBonusPool'];
+      if (bonusPoolRaw != null) {
+        _exactaBonusPool = double.tryParse(bonusPoolRaw.toString()) ?? _exactaBonusPool;
+      }
+      // La exacta del bonus solo aplica a la carrera del video (no en venta anticipada)
+      _bonusExacta = (nextRaceJson == null ? (status['bonusExacta'] as String? ?? '') : '');
 
       // Límite de venta del POS (efectivo neto por agencia)
       _salesLimitEnabled = status['salesLimitEnabled'] == true;
