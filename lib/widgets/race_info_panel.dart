@@ -36,7 +36,7 @@ class RaceInfoPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final double progress = (countdownSeconds / 300.0).clamp(0.0, 1.0);
+    final double progress = (countdownSeconds / 240.0).clamp(0.0, 1.0);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),

@@ -11,6 +11,9 @@ class CuotasScreen extends StatefulWidget {
 }
 
 class _CuotasScreenState extends State<CuotasScreen> {
+  // Máx/mín de cada mercado, para colorear la más alta (rojo) y la más baja (verde)
+  double _exMax = 0, _exMin = 0, _ganMax = 0, _ganMin = 0;
+
   Color _dogColor(int dog) {
     switch (dog) {
       case 1: return const Color(0xFFE02020);
@@ -23,10 +26,14 @@ class _CuotasScreenState extends State<CuotasScreen> {
     }
   }
 
-  Color _oddsTextColor(double odds) {
+  // Color relativo: la cuota que MÁS paga (más alta) en rojo, la que MENOS paga
+  // (más baja) en verde; el resto en blanco.
+  Color _oddsRelColor(double odds, double maxOdds, double minOdds) {
     if (odds <= 0) return Colors.white24;
-    if (odds < 10) return const Color(0xFFFF6B35);
-    if (odds < 20) return const Color(0xFF5EE97A);
+    if (maxOdds > minOdds) {
+      if (odds >= maxOdds) return const Color(0xFFFF5252); // más paga → rojo
+      if (odds <= minOdds) return const Color(0xFF4CD964); // menos paga → verde
+    }
     return Colors.white;
   }
 
@@ -101,7 +108,7 @@ class _CuotasScreenState extends State<CuotasScreen> {
           text,
           style: TextStyle(
             fontFamily: 'DinNextLtPro',
-            color: _oddsTextColor(odds),
+            color: _oddsRelColor(odds, _exMax, _exMin),
             fontSize: 18,
             fontWeight: FontWeight.bold,
           ),
@@ -112,6 +119,23 @@ class _CuotasScreenState extends State<CuotasScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Máx/mín de EXACTA (todas las parejas válidas) y de GANADOR (6 perros)
+    double exMax = 0, exMin = double.infinity;
+    for (int a = 1; a <= 6; a++) {
+      for (int b = 1; b <= 6; b++) {
+        if (a == b) continue;
+        final o = widget.state.getExactaOddsPair(a, b);
+        if (o > 0) { if (o > exMax) exMax = o; if (o < exMin) exMin = o; }
+      }
+    }
+    double ganMax = 0, ganMin = double.infinity;
+    for (int d = 1; d <= 6; d++) {
+      final o = widget.state.getGanarOdds(d);
+      if (o > 0) { if (o > ganMax) ganMax = o; if (o < ganMin) ganMin = o; }
+    }
+    _exMax = exMax; _exMin = exMin == double.infinity ? 0 : exMin;
+    _ganMax = ganMax; _ganMin = ganMin == double.infinity ? 0 : ganMin;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 48.0, vertical: 16.0),
       child: Column(
@@ -299,7 +323,7 @@ class _CuotasScreenState extends State<CuotasScreen> {
                               odds > 0 ? odds.toStringAsFixed(2) : '—',
                               style: TextStyle(
                                 fontFamily: 'DinNextLtPro',
-                                color: _oddsTextColor(odds),
+                                color: _oddsRelColor(odds, _ganMax, _ganMin),
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
                               ),
