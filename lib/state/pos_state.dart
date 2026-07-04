@@ -401,17 +401,36 @@ class PosState extends ChangeNotifier {
     final raceId = _currentRaceId;
     if (raceId == null) return;
     try {
-      final rows = await _api.getRaceOddsLive(raceId);
       final odds = <String, double>{};
-      for (final row in rows) {
-        final betType = row['betType'] as String;
-        final selection = row['selection'] as String;
-        // Usar currentOdds primero, finalOdds como fallback, ignorar nulos
-        final rawOdds = row['currentOdds'] ?? row['finalOdds'];
-        if (rawOdds == null) continue;
-        final parsed = double.tryParse(rawOdds.toString()) ?? 0.0;
-        if (parsed > 0) odds['$betType:$selection'] = parsed;
+      final agencyId = _auth.agencyId;
+
+      if (agencyId != null && agencyId.isNotEmpty) {
+        // Cuotas POR AGENCIA (Fase R6/Controlled Rollout). Con el motor
+        // inerte (delta=0, caso por defecto), son byte-idénticas a las
+        // globales — mismo número, misma fuente, sin cambio de comportamiento.
+        final result = await _api.getAgencyOddsLive(raceId, agencyId);
+        final rows = (result['odds'] as List<dynamic>?) ?? const [];
+        for (final row in rows) {
+          final betType = row['betType'] as String;
+          final selection = row['selection'] as String;
+          final parsed = double.tryParse(row['odds'].toString()) ?? 0.0;
+          if (parsed > 0) odds['$betType:$selection'] = parsed;
+        }
+      } else {
+        // Sin agencia conocida (no debería ocurrir en un POS real): fallback
+        // a las cuotas globales, igual que el comportamiento previo.
+        final rows = await _api.getRaceOddsLive(raceId);
+        for (final row in rows) {
+          final betType = row['betType'] as String;
+          final selection = row['selection'] as String;
+          // Usar currentOdds primero, finalOdds como fallback, ignorar nulos
+          final rawOdds = row['currentOdds'] ?? row['finalOdds'];
+          if (rawOdds == null) continue;
+          final parsed = double.tryParse(rawOdds.toString()) ?? 0.0;
+          if (parsed > 0) odds['$betType:$selection'] = parsed;
+        }
       }
+
       _liveOdds = odds;
       notifyListeners();
     } catch (_) {
