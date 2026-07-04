@@ -112,13 +112,6 @@ class ApiClient {
     return await _request('GET', '/odds/race/$raceId/live') as List<dynamic>;
   }
 
-  /// Cuotas efectivas de la agencia (compute-on-read, Fase R6). Con el motor
-  /// adaptativo inerte (delta=0, caso por defecto) son idénticas a las
-  /// globales; solo cambian si la agencia está activa en Producción Controlada.
-  Future<Map<String, dynamic>> getAgencyOddsLive(String raceId, String agencyId) async {
-    return await _request('GET', '/agency-odds/race/$raceId/agency/$agencyId') as Map<String, dynamic>;
-  }
-
   /// Consulta la cuota exacta de UNA selección específica directo de la DB
   Future<double?> getSelectionOdds(String raceId, String betType, String selection) async {
     final result = await _request('GET', '/odds/race/$raceId/selection?betType=$betType&selection=$selection') as Map<String, dynamic>;
