@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:pos/services/api_client.dart';
 import 'package:pos/services/print_service.dart';
@@ -119,6 +121,10 @@ class _PremiosScreenState extends State<PremiosScreen> {
         _isPaying = false;
         _payingTicketId = null;
       });
+      // El pago no pasa por PosState — refrescar el historial de ventas para
+      // que la pantalla de Ventas refleje el ticket pagado y el balance de
+      // inmediato, sin esperar al próximo cambio de carrera.
+      unawaited(widget.state.refreshSalesHistory());
       // Imprimir comprobante de pago — solo la jugada ganadora
       PrintService.printPaidReceipt(
         ticketNumber:  number as int,

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:pos/services/api_client.dart';
 import 'package:pos/services/print_service.dart';
@@ -86,6 +88,9 @@ class _TicketsScreenState extends State<TicketsScreen> {
         paperWidthMm: widget.state.selectedPaperWidth,
       );
       await _load();
+      // La anulación no pasa por PosState — refrescar el historial de ventas
+      // para que la pantalla de Ventas refleje el balance real de inmediato.
+      unawaited(widget.state.refreshSalesHistory());
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(backgroundColor: _gold, content: Text('Ticket #$number anulado', style: const TextStyle(fontFamily: 'DinNextLtPro', color: Colors.black, fontWeight: FontWeight.bold))),

@@ -74,10 +74,13 @@ class MainLayout extends StatelessWidget {
                   Row(
                     children: [
                       RaceInfoPanel(
-                        raceNumber: state.currentRace,
+                        // Muestra la carrera FÍSICAMENTE activa (corriendo/cerrada),
+                        // no la de venta anticipada — así el header nunca "salta"
+                        // a la siguiente carrera antes de que la actual termine.
+                        raceNumber: state.displayRaceNumber,
                         countdownSeconds: state.countdownSeconds,
                         nextRaceStartLabel: state.nextRaceStartLabel,
-                        raceStatusLabel: state.raceStatusLabel,
+                        raceStatusLabel: state.displayRaceStatusLabel,
                         x2Dog: state.x2Dog,
                         x3Dog: state.x3Dog,
                         jackpotAmount: state.jackpotAmount,
