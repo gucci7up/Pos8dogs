@@ -109,6 +109,21 @@ class PosState extends ChangeNotifier {
   int _currentRace = 0;
   int get currentRace => _currentRace;
 
+  // Carrera que se MUESTRA en el header (RaceInfoPanel): siempre la carrera
+  // físicamente activa (corriendo su video o recién cerrada), NUNCA la
+  // siguiente carrera de venta anticipada. Independiente de `currentRace`
+  // (que sigue siendo la carrera de VENTA, usada para tickets y apuestas —
+  // no se toca para no romper esa lógica). Viene directo de
+  // status['currentRace'] / status['status'], que el backend siempre resuelve
+  // como "la carrera físicamente activa" (playingRace ?? salesRace).
+  int _displayRaceNumber = 0;
+  int get displayRaceNumber => _displayRaceNumber;
+
+  String _displayRaceStatus = 'IDLE';
+
+  /// Estado de la carrera MOSTRADA (ver `_displayRaceNumber`), en español.
+  String get displayRaceStatusLabel => _statusLabel(_displayRaceStatus);
+
   int _countdownSeconds = 0;
   int get countdownSeconds => _countdownSeconds;
 
@@ -144,9 +159,11 @@ class PosState extends ChangeNotifier {
     return '$h:$m:$s';
   }
 
-  /// Estado de la carrera actual, en español, para mostrar en el panel.
-  String get raceStatusLabel {
-    switch (_raceStatus) {
+  /// Estado de la carrera actual (de VENTA), en español, para mostrar en el panel.
+  String get raceStatusLabel => _statusLabel(_raceStatus);
+
+  static String _statusLabel(String status) {
+    switch (status) {
       case 'OPEN':
         return 'ABIERTA';
       case 'CLOSED':
@@ -214,6 +231,12 @@ class PosState extends ChangeNotifier {
 
   List<Ticket> _salesHistory = [];
   List<Ticket> get salesHistory => _salesHistory;
+
+  /// Refresca el historial de ventas de inmediato. Llamar después de pagar un
+  /// premio (Premios) o anular un ticket, ya que esas acciones no pasan por
+  /// PosState y de otro modo la pantalla de Ventas quedaría desactualizada
+  /// hasta el próximo cambio de carrera.
+  Future<void> refreshSalesHistory() => _refreshSalesHistory();
 
   List<RaceResult> _resultsHistory = [];
   List<RaceResult> get resultsHistory => _resultsHistory;
@@ -292,6 +315,16 @@ class PosState extends ChangeNotifier {
       _isServerOnline = true;
 
       final currentRaceJson = status['currentRace'] as Map<String, dynamic>?;
+
+      // Carrera/estado a MOSTRAR en el header: el backend siempre resuelve
+      // 'currentRace'/'status' como la carrera físicamente activa (corriendo
+      // su video o recién cerrada) por encima de la de venta anticipada, así
+      // que esto NUNCA salta a la siguiente carrera antes de tiempo.
+      if (currentRaceJson != null) {
+        _displayRaceNumber = (currentRaceJson['numero'] as num).toInt();
+      }
+      _displayRaceStatus = (status['status'] as String?) ?? 'IDLE';
+
       // Venta anticipada: mientras corre el video de la carrera actual, el
       // backend ya puede tener la próxima carrera abierta en 'nextRace'.
       // Si viene, el POS vende esa carrera de inmediato.
