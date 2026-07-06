@@ -44,3 +44,7 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 .claude/
+
+# Builds intermedios de cada variante (build_both.bat) — regenerables.
+# Solo el instalador .exe final se sube al repo.
+/installer/dist/
