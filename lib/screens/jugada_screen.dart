@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pos/config/bet_mode.dart';
 import 'package:pos/widgets/dog_odds_card.dart';
 import 'package:pos/widgets/action_button.dart';
 import 'package:pos/widgets/amount_button.dart';
@@ -390,52 +391,53 @@ class _JugadaScreenState extends State<JugadaScreen> {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 24),
-
-                        // 3° Lugar Row
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            const SizedBox(
-                              width: 100,
-                              child: Text(
-                                '3°',
-                                style: TextStyle(
-                                  fontFamily: 'DinNextLtPro',
-                                  color: Colors.white,
-                                  fontSize: 76,
-                                  fontWeight: FontWeight.bold,
-                                  fontStyle: FontStyle.italic,
+                        // 3° Lugar Row — solo en la build con TRIFECTA habilitada
+                        if (kTrifectaEnabled) ...[
+                          const SizedBox(height: 24),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              const SizedBox(
+                                width: 100,
+                                child: Text(
+                                  '3°',
+                                  style: TextStyle(
+                                    fontFamily: 'DinNextLtPro',
+                                    color: Colors.white,
+                                    fontSize: 76,
+                                    fontWeight: FontWeight.bold,
+                                    fontStyle: FontStyle.italic,
+                                  ),
                                 ),
                               ),
-                            ),
-                            Expanded(
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: List.generate(6, (index) {
-                                  final dogNum = index + 1;
-                                  final info = _dogInfo[dogNum]!;
-                                  final isSelected = state.selectedDog3 == dogNum;
-                                  final isDimmed = state.selectedDog3 != null;
-                                  return DogOddsCard(
-                                    number: dogNum,
-                                    name: info['name']!,
-                                    color: info['color']!,
-                                    ganarOdds: state.getGanarOdds(dogNum),
-                                    exactaOdds: state.getExactaOdds(dogNum),
-                                    trifectaOdds: state.getTrifectaOdds(dogNum),
-                                    width: 210,
-                                    isSelected: isSelected,
-                                    isDimmed: isDimmed,
-                                    onTap: state.canSell
-                                        ? () => state.selectDog3(dogNum)
-                                        : null,
-                                  );
-                                }),
+                              Expanded(
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: List.generate(6, (index) {
+                                    final dogNum = index + 1;
+                                    final info = _dogInfo[dogNum]!;
+                                    final isSelected = state.selectedDog3 == dogNum;
+                                    final isDimmed = state.selectedDog3 != null;
+                                    return DogOddsCard(
+                                      number: dogNum,
+                                      name: info['name']!,
+                                      color: info['color']!,
+                                      ganarOdds: state.getGanarOdds(dogNum),
+                                      exactaOdds: state.getExactaOdds(dogNum),
+                                      trifectaOdds: state.getTrifectaOdds(dogNum),
+                                      width: 210,
+                                      isSelected: isSelected,
+                                      isDimmed: isDimmed,
+                                      onTap: state.canSell
+                                          ? () => state.selectDog3(dogNum)
+                                          : null,
+                                    );
+                                  }),
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
                   ),

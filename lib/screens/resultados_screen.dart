@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pos/config/bet_mode.dart';
 import 'package:pos/widgets/dog_button.dart';
 import 'package:pos/state/pos_state.dart';
 import 'package:pos/services/print_service.dart';
@@ -57,7 +58,7 @@ class _ResultadosScreenState extends State<ResultadosScreen> {
                         flex: 4,
                         child: Center(
                           child: Text(
-                            'TRIFECTA',
+                            kTrifectaEnabled ? 'TRIFECTA' : 'GANADORES',
                             style: TextStyle(
                               fontFamily: 'DinNextLtPro',
                               color: Colors.black,
@@ -134,9 +135,10 @@ class _ResultadosScreenState extends State<ResultadosScreen> {
                                   DogButton(number: item.winner1, height: 36),
                                   const SizedBox(width: 8),
                                   DogButton(number: item.winner2, height: 36),
-                                  const SizedBox(width: 8),
-                                  if (item.winner3 > 0)
+                                  if (kTrifectaEnabled && item.winner3 > 0) ...[
+                                    const SizedBox(width: 8),
                                     DogButton(number: item.winner3, height: 36),
+                                  ],
                                 ],
                               ),
                             ),
