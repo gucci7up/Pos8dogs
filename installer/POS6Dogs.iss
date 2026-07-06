@@ -4,8 +4,8 @@
 #define AppExeName   "pos.exe"
 ; Cada variante se compila por separado (ver build_both.bat) y se copia a su
 ; propia carpeta en dist\ antes de correr este instalador.
-#define ReleaseDirTrifecta  "..\dist\trifecta"
-#define ReleaseDirExacta    "..\dist\exacta"
+#define ReleaseDirTrifecta  "dist\trifecta"
+#define ReleaseDirExacta    "dist\exacta"
 #define IconFile     "..\windows\runner\resources\app_icon.ico"
 
 [Setup]
