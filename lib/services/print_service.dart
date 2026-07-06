@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:pos/config/bet_mode.dart';
 import 'package:pos/state/pos_state.dart';
 
 /// Genera e imprime recibos en formato térmico 58 mm u 80 mm.
@@ -183,7 +184,7 @@ class PrintService {
               ),
               pw.Expanded(
                 child: pw.Center(
-                  child: pw.Text('TRIFECTA', style: _bold(size: _s(8, paperWidthMm))),
+                  child: pw.Text(kTrifectaEnabled ? 'TRIFECTA' : 'GANADORES', style: _bold(size: _s(8, paperWidthMm))),
                 ),
               ),
               pw.SizedBox(
@@ -198,7 +199,7 @@ class PrintService {
 
             // Filas de resultados
             ...results.map((r) {
-              final trifecta = r.winner3 > 0
+              final trifecta = (kTrifectaEnabled && r.winner3 > 0)
                   ? '${r.winner1} - ${r.winner2} - ${r.winner3}'
                   : '${r.winner1} - ${r.winner2}';
               return pw.Padding(
