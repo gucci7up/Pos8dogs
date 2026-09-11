@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:pos/layouts/desktop_layout.dart';
 
 class LoginScreen extends StatefulWidget {
-  final VoidCallback onAccess;
+  /// Recibe el número de acceso y el PIN tecleados. Devuelve `null` si el
+  /// login fue correcto, o el mensaje de error a mostrar en pantalla.
+  final Future<String?> Function(String account, String password) onAccess;
 
   const LoginScreen({super.key, required this.onAccess});
 
@@ -16,6 +18,27 @@ class _LoginScreenState extends State<LoginScreen> {
   String _account = '';
   String _password = '';
   _ActiveField _active = _ActiveField.account;
+  String? _error;
+  bool _loading = false;
+
+  Future<void> _submit() async {
+    if (_loading) return;
+    if (_account.isEmpty || _password.isEmpty) {
+      setState(() => _error = 'Escribe tu número de acceso y tu PIN');
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    final error = await widget.onAccess(_account, _password);
+    if (!mounted) return;
+    setState(() {
+      _loading = false;
+      _error = error;
+      if (error != null) _password = '';
+    });
+  }
 
   void _typeDigit(String digit) {
     setState(() {
@@ -150,8 +173,22 @@ class _LoginScreenState extends State<LoginScreen> {
                                 _ClearButton(onTap: _clearPassword),
                               ],
                             ),
+                            if (_error != null) ...[
+                              const SizedBox(height: 20),
+                              Text(
+                                _error!,
+                                style: const TextStyle(
+                                  color: Color(0xFFFF6B6B),
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
                             const SizedBox(height: 56),
-                            _AccesoButton(onTap: widget.onAccess),
+                            _AccesoButton(
+                              onTap: _submit,
+                              isLoading: _loading,
+                            ),
                           ],
                         ),
                       ),
@@ -303,8 +340,9 @@ class _ClearButtonState extends State<_ClearButton> {
 
 class _AccesoButton extends StatefulWidget {
   final VoidCallback onTap;
+  final bool isLoading;
 
-  const _AccesoButton({required this.onTap});
+  const _AccesoButton({required this.onTap, this.isLoading = false});
 
   @override
   State<_AccesoButton> createState() => _AccesoButtonState();
@@ -320,7 +358,7 @@ class _AccesoButtonState extends State<_AccesoButton> {
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
       child: GestureDetector(
-        onTap: widget.onTap,
+        onTap: widget.isLoading ? null : widget.onTap,
         child: Row(
           children: [
             // Cuadro dorado con icono de candado
@@ -355,7 +393,16 @@ class _AccesoButtonState extends State<_AccesoButton> {
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: const Color(0xFFD4AF37), width: 2),
                 ),
-                child: const Text(
+                child: widget.isLoading
+                    ? const SizedBox(
+                        width: 30,
+                        height: 30,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 3,
+                          color: Color(0xFFD4AF37),
+                        ),
+                      )
+                    : const Text(
                   'ACCESO',
                   style: TextStyle(
                     color: Colors.white,

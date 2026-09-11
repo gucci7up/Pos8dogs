@@ -3,6 +3,7 @@ import 'package:pos/widgets/dog_odds_card.dart';
 import 'package:pos/widgets/action_button.dart';
 import 'package:pos/widgets/amount_button.dart';
 import 'package:pos/state/pos_state.dart';
+import 'package:pos/services/ticket_printer.dart';
 
 class JugadaScreen extends StatefulWidget {
   final PosState state;
@@ -25,6 +26,58 @@ const Map<int, Map<String, String>> _dogInfo = {
 };
 
 class _JugadaScreenState extends State<JugadaScreen> {
+  /// Vende el ticket contra el backend y avisa en pantalla: el número de
+  /// ticket si entró, o el motivo del rechazo (venta cerrada, límite de la
+  /// agencia, premio sobre el tope). Sin este aviso el cajero no sabría que
+  /// la jugada no quedó registrada.
+  Future<void> _sellTicket() async {
+    final state = widget.state;
+    if (state.currentTicketPlays.isEmpty &&
+        state.selectedDog1 == null &&
+        state.selectedDog2 == null) {
+      return;
+    }
+    final error = await state.printTicket();
+    if (!mounted) return;
+
+    final lastTicket = state.salesHistory.isEmpty ? null : state.salesHistory.first;
+
+    // La venta ya quedó registrada en el backend; la impresión es un paso
+    // aparte y si falla NO invalida el ticket, solo se avisa.
+    String? printError;
+    if (error == null && lastTicket != null) {
+      printError = await TicketPrinter.print(
+        ticket: lastTicket,
+        raceNumber: state.currentRace,
+        agencyName: state.agencyName,
+        cashier: state.currentUser,
+      );
+      if (!mounted) return;
+    }
+
+    final message = error ??
+        (lastTicket == null
+            ? 'Ticket registrado'
+            : printError == null
+                ? 'Ticket #${lastTicket.ticketNumber} impreso — RD\$${lastTicket.amount.toStringAsFixed(2)}'
+                : 'Ticket #${lastTicket.ticketNumber} registrado, pero $printError');
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: error != null
+            ? const Color(0xFF7F1D1D)
+            : printError != null
+                ? const Color(0xFF7C5A10)
+                : const Color(0xFF1E3A1E),
+        duration: Duration(seconds: error == null && printError == null ? 3 : 6),
+      ),
+    );
+  }
+
   bool _isDeleteHovered = false;
   bool _isDeletePressed = false;
   bool _isPrintHovered = false;
@@ -549,7 +602,7 @@ class _JugadaScreenState extends State<JugadaScreen> {
                           onEnter: (_) => setState(() => _isPrintHovered = true),
                           onExit: (_) => setState(() => _isPrintHovered = false),
                           child: GestureDetector(
-                            onTap: state.printTicket,
+                            onTap: _sellTicket,
                             onTapDown: (_) => setState(() => _isPrintPressed = true),
                             onTapUp: (_) => setState(() => _isPrintPressed = false),
                             onTapCancel: () => setState(() => _isPrintPressed = false),
@@ -870,7 +923,7 @@ class _JugadaScreenState extends State<JugadaScreen> {
                           onExit: (_) => setState(() => _isPrintHovered = false),
                           child: GestureDetector(
                             onTap: () {
-                              state.printTicket();
+                              _sellTicket();
                               setState(() {
                                 _isTicketOpen = false;
                               });

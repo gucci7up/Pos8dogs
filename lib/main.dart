@@ -66,19 +66,38 @@ class RootScreen extends StatefulWidget {
 }
 
 class _RootScreenState extends State<RootScreen> {
+  /// El estado vive aquí (no dentro de MainScreen) porque el login es quien
+  /// obtiene el token y arranca el sondeo al backend.
+  final PosState _state = PosState();
   bool _loggedIn = false;
+
+  @override
+  void dispose() {
+    _state.dispose();
+    super.dispose();
+  }
+
+  Future<String?> _handleLogin(String account, String password) async {
+    final error = await _state.login(account, password);
+    if (error == null && mounted) {
+      setState(() => _loggedIn = true);
+    }
+    return error;
+  }
 
   @override
   Widget build(BuildContext context) {
     if (!_loggedIn) {
-      return LoginScreen(onAccess: () => setState(() => _loggedIn = true));
+      return LoginScreen(onAccess: _handleLogin);
     }
-    return const MainScreen();
+    return MainScreen(state: _state);
   }
 }
 
 class MainScreen extends StatefulWidget {
-  const MainScreen({super.key});
+  final PosState state;
+
+  const MainScreen({super.key, required this.state});
 
   @override
   State<MainScreen> createState() => _MainScreenState();
@@ -86,19 +105,8 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _currentTabIndex = 0;
-  late final PosState _state;
 
-  @override
-  void initState() {
-    super.initState();
-    _state = PosState();
-  }
-
-  @override
-  void dispose() {
-    _state.dispose();
-    super.dispose();
-  }
+  PosState get _state => widget.state;
 
   @override
   Widget build(BuildContext context) {

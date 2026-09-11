@@ -153,7 +153,9 @@ class _RightPanelState extends State<RightPanel> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                'AGENCIA ${widget.state.agencyId}',
+                widget.state.agencyName.isEmpty
+                    ? 'SIN AGENCIA'
+                    : 'AGENCIA ${widget.state.agencyName}',
                 style: const TextStyle(
                   fontFamily: 'DinNextLtPro',
                   color: Color(0xFFD4AF37),

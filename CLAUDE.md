@@ -17,16 +17,30 @@ A Flutter desktop POS ("point of sale") app for a greyhound racing betting kiosk
 ## Architecture
 
 ### State management
-All app state lives in a single `ChangeNotifier`: `lib/state/pos_state.dart` (`PosState`). It is instantiated once in `main.dart`'s `_MainScreenState` and passed down to every screen/widget that needs it. Screens wrap themselves in `ListenableBuilder`/`addListener` to rebuild on state changes — there is no provider/bloc/riverpod, just plain `ChangeNotifier` + manual listeners.
+All app state lives in a single `ChangeNotifier`: `lib/state/pos_state.dart` (`PosState`). It is instantiated once in `main.dart`'s `_RootScreenState` (above the login, because the login is what obtains the token) and passed down to every screen/widget that needs it. Screens wrap themselves in `ListenableBuilder`/`addListener` to rebuild on state changes — there is no provider/bloc/riverpod, just plain `ChangeNotifier` + manual listeners.
 
 `PosState` owns:
-- The current race number and a 1-second countdown `Timer` that auto-advances the race when it hits zero.
+- The session (token via `ApiClient`, `currentUser`, `agencyId`, `agencyName`, `role`).
+- The current race (`currentRace`, `sellableRaceId`) and the sale countdown, both polled from the backend every 5s; a 1-second local `Timer` only fills in the seconds between polls.
 - Dog selections (`selectedDog1`/`selectedDog2`, for 1st/2nd place picks) and the current bet amount.
 - The in-progress ticket (`currentTicketPlays`, a list of `Bet`), auto-added when both dogs + an amount are selected.
-- Sales history (`salesHistory`, a list of `Ticket`), appended when `printTicket()` is called.
-- Static mock data: `resultsHistory` (past race results) and `oddsHistory` (per-race odds per dog, used to compute combination odds via `addPlayToTicket`).
+- Sales history (`salesHistory`) from `GET /tickets`, results (`resultsHistory`) from `GET /races/history`, and odds (`oddsHistory`) from `GET /odds/race/{id}`.
 
-There is no persistence or backend — all data is in-memory and resets on restart.
+### Backend
+
+The app talks to the MBSport DS8 API through `lib/api/api_client.dart`. The base
+URL defaults to `https://api.ds8.site` and can be overridden at build time:
+
+    flutter run -d windows --dart-define=API_BASE_URL=http://localhost:3000
+
+Odds are never computed locally: the backend publishes the full WINNER/EXACTA
+matrix and freezes the odds itself when the ticket is sold, so what the client
+sends is only bet type, selection and amount. Selling happens against the race
+that is `OPEN` — which during a video is the *next* race (anticipated sale).
+
+Ticket printing lives in `lib/services/ticket_printer.dart`: an 80 mm receipt
+PDF sent straight to the default printer. A printing failure never invalidates
+a sale that the backend already registered.
 
 ### Navigation / layout
 - `main.dart` defines `MainScreen`, which holds `_currentTabIndex` and switches between the four screens in `lib/screens/`: Jugada (betting), Resultados (results), Cuotas (odds), Ventas (sales).

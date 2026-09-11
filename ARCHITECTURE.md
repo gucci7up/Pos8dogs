@@ -91,11 +91,11 @@ Toda la lógica de negocio y los datos están centralizados en **`lib/state/pos_
 - **`RaceResult`**: resultado histórico — `raceNumber`, `winner1`, `winner2`, `bonus`.
 - **`RaceOdds`**: cuotas históricas — `raceNumber`, `odds` (lista de 8 valores, uno por perro).
 
-### Datos en memoria (mock, sin persistencia)
+### Datos del backend
 
-- `_currentRace` (empieza en `4226`) y `_countdownSeconds` (cuenta regresiva de 300s con `Timer.periodic`, al llegar a 0 reinicia a 300 y avanza `_currentRace`).
-- `resultsHistory`: lista estática hardcodeada de `RaceResult` (carreras 4214-4226).
-- `oddsHistory`: lista estática hardcodeada de `RaceOdds` (cuotas de las mismas carreras).
+- `_currentRace` y `_countdownSeconds` salen de `GET /race-engine/status` (sondeo cada 5s); el `Timer.periodic` de 1s solo descuenta entre sondeos.
+- `resultsHistory`: `GET /races/history` — con `agencyId`, el resultado que realmente vio esa agencia.
+- `oddsHistory`: `GET /odds/race/{id}` de la carrera en venta y de las últimas terminadas.
 - `_currentTicketPlays`: jugadas del ticket en construcción.
 - `_salesHistory`: tickets ya impresos.
 
@@ -166,10 +166,25 @@ La única integración con el sistema operativo es **`window_manager`** (paquete
 
 ## 7. APIs
 
-**No hay APIs externas ni backend.** El proyecto:
-- No usa `http`, `dio`, GraphQL, websockets, Firebase ni ningún SDK de red.
-- No tiene variables de entorno, claves de API ni configuración de endpoints.
-- Todos los datos (resultados, cuotas, tickets) son **mock/estáticos o generados en memoria** dentro de `PosState`.
-- Las acciones de "imprimir" (en Resultados, Cuotas y Ventas) solo muestran un `SnackBar` de feedback — no hay integración real con impresoras ni servicios externos.
+Toda la red pasa por `lib/api/api_client.dart` (paquete `http`), contra la API
+de MBSport DS8. La URL base es `https://api.ds8.site` y se puede cambiar al
+compilar con `--dart-define=API_BASE_URL=...`.
 
-Si en el futuro se necesita conectar con un backend real (resultados en vivo, impresión física, persistencia de ventas), el punto de extensión natural es sustituir/complementar los datos hardcodeados de `PosState` (`resultsHistory`, `oddsHistory`, `_salesHistory`) por llamadas a una nueva capa de servicios, manteniendo la misma interfaz de `ChangeNotifier` para no romper las pantallas existentes.
+| Qué | Endpoint |
+| --- | --- |
+| Login (número de acceso + PIN) | `POST /auth/login` |
+| Perfil, agencia y rol | `GET /users/me` |
+| Carrera en venta, cuenta regresiva, X2/X3, límite de venta | `GET /race-engine/status` |
+| Matriz de cuotas WINNER/EXACTA | `GET /odds/race/{raceId}` |
+| Venta del ticket | `POST /tickets` |
+| Ventas de la agencia | `GET /tickets` |
+| Resultados por agencia | `GET /races/history` |
+
+Dos reglas del backend que condicionan al cliente: **la cuota la congela el
+servidor** al vender (lo que mande el POS se ignora), y **solo se vende contra
+la carrera `OPEN`**, que durante la reproducción de un video es la siguiente
+(venta anticipada).
+
+La impresión del boleto es real: `lib/services/ticket_printer.dart` arma un PDF
+de 80 mm y lo manda a la impresora predeterminada sin diálogo. Si la impresión
+falla, la venta ya registrada NO se invalida: se avisa al cajero.
