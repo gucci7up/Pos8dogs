@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:pos/config/dogs.dart';
+import 'package:pos/config/bet_mode.dart';
 import 'package:pos/widgets/dog_odds_card.dart';
 import 'package:pos/widgets/action_button.dart';
 import 'package:pos/widgets/amount_button.dart';
 import 'package:pos/state/pos_state.dart';
-import 'package:pos/services/ticket_printer.dart';
+import 'package:pos/services/print_service.dart';
 
 class JugadaScreen extends StatefulWidget {
   final PosState state;
@@ -14,70 +16,9 @@ class JugadaScreen extends StatefulWidget {
   State<JugadaScreen> createState() => _JugadaScreenState();
 }
 
-const Map<int, Map<String, String>> _dogInfo = {
-  1: {'name': 'BRAVO', 'color': 'ROJO'},
-  2: {'name': 'RELAMPAGO', 'color': 'AZUL'},
-  3: {'name': 'TIGRE', 'color': 'BLANCO'},
-  4: {'name': 'NEGRO', 'color': 'NEGRO'},
-  5: {'name': 'FURIA', 'color': 'NARANJA'},
-  6: {'name': 'BANDIDO', 'color': 'BLANCO/NEGRO'},
-  7: {'name': 'KIKI', 'color': 'VERDE'},
-  8: {'name': 'RAYMUNDO', 'color': 'NARANJA/NEGRO'},
-};
+const Map<int, Map<String, String>> _dogInfo = kDogInfo;
 
 class _JugadaScreenState extends State<JugadaScreen> {
-  /// Vende el ticket contra el backend y avisa en pantalla: el número de
-  /// ticket si entró, o el motivo del rechazo (venta cerrada, límite de la
-  /// agencia, premio sobre el tope). Sin este aviso el cajero no sabría que
-  /// la jugada no quedó registrada.
-  Future<void> _sellTicket() async {
-    final state = widget.state;
-    if (state.currentTicketPlays.isEmpty &&
-        state.selectedDog1 == null &&
-        state.selectedDog2 == null) {
-      return;
-    }
-    final error = await state.printTicket();
-    if (!mounted) return;
-
-    final lastTicket = state.salesHistory.isEmpty ? null : state.salesHistory.first;
-
-    // La venta ya quedó registrada en el backend; la impresión es un paso
-    // aparte y si falla NO invalida el ticket, solo se avisa.
-    String? printError;
-    if (error == null && lastTicket != null) {
-      printError = await TicketPrinter.print(
-        ticket: lastTicket,
-        raceNumber: state.currentRace,
-        agencyName: state.agencyName,
-        cashier: state.currentUser,
-      );
-      if (!mounted) return;
-    }
-
-    final message = error ??
-        (lastTicket == null
-            ? 'Ticket registrado'
-            : printError == null
-                ? 'Ticket #${lastTicket.ticketNumber} impreso — RD\$${lastTicket.amount.toStringAsFixed(2)}'
-                : 'Ticket #${lastTicket.ticketNumber} registrado, pero $printError');
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: error != null
-            ? const Color(0xFF7F1D1D)
-            : printError != null
-                ? const Color(0xFF7C5A10)
-                : const Color(0xFF1E3A1E),
-        duration: Duration(seconds: error == null && printError == null ? 3 : 6),
-      ),
-    );
-  }
-
   bool _isDeleteHovered = false;
   bool _isDeletePressed = false;
   bool _isPrintHovered = false;
@@ -85,7 +26,7 @@ class _JugadaScreenState extends State<JugadaScreen> {
   bool _isTicketOpen = false;
   int _lastTicketLength = 0;
   int? _pressedPlayIndex;
-  final TextEditingController _repeatTicketController = TextEditingController();
+  String _repeatInput = '';
 
   @override
   void initState() {
@@ -102,32 +43,48 @@ class _JugadaScreenState extends State<JugadaScreen> {
         fit: BoxFit.contain,
       );
     }
+    final height = play.dog3 != null ? 18.0 : 28.0;
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       mainAxisSize: MainAxisSize.min,
       children: [
         Image.asset(
           'assets/resources/botonnumero${play.dog1}.png',
-          height: 28,
+          height: height,
           fit: BoxFit.contain,
         ),
         const SizedBox(height: 4),
         Image.asset(
           'assets/resources/botonnumero${play.dog2}.png',
-          height: 28,
+          height: height,
           fit: BoxFit.contain,
         ),
+        if (play.dog3 != null) ...[
+          const SizedBox(height: 4),
+          Image.asset(
+            'assets/resources/botonnumero${play.dog3}.png',
+            height: height,
+            fit: BoxFit.contain,
+          ),
+        ],
       ],
     );
   }
 
-  // Busca el ticket escrito por el usuario y recarga sus jugadas
-  void _loadTicketById(PosState state) {
-    final ticket = state.findTicketByNumber(_repeatTicketController.text);
+  // Abre teclado numérico táctil y busca el ticket
+  Future<void> _openRepeatNumpad(PosState state) async {
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => _RepeatTicketDialog(initial: _repeatInput),
+    );
+    if (result == null) return;
+    setState(() => _repeatInput = result);
+    if (result.isEmpty) return;
+    final ticket = await state.findTicketByNumber(result);
+    if (!mounted) return;
     if (ticket != null) {
       state.repeatTicket(ticket);
-      _repeatTicketController.clear();
-      FocusScope.of(context).unfocus();
+      setState(() => _repeatInput = '');
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -138,74 +95,155 @@ class _JugadaScreenState extends State<JugadaScreen> {
     }
   }
 
+  // Imprime el ticket directo — sin modal intermedio
+  Future<void> _handlePrintTicket(PosState state) async {
+    if (!state.canSell) {
+      final msg = state.salesBlocked
+          ? 'Límite de venta alcanzado. El supervisor debe recoger el efectivo y liberar el crédito.'
+          : 'Ventas cerradas para esta carrera';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+    final result = await state.printTicket();
+    if (!mounted) return;
+    if (result.error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.error!), duration: const Duration(seconds: 3)),
+      );
+      return;
+    }
+    final ticketNumber = result.ticketNumber ?? 0;
+    final ticket = state.salesHistory
+        .where((t) => t.ticketNumber == ticketNumber)
+        .firstOrNull;
+    if (ticket != null) {
+      PrintService.printTicketReceipt(
+        ticket: ticket,
+        agencyName: state.agencyName,
+        cashier: state.currentUser,
+        ticketId: result.ticketId,
+        printerName: state.selectedPrinter,
+        paperWidthMm: state.selectedPaperWidth,
+      );
+    }
+  }
+
   // Cuadrito para escribir un N° de ticket y recargar esa jugada
   Widget _buildRepeatTicketBox(PosState state) {
-    return Container(
-      width: 145,
-      height: 145,
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1B1B1B),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: const Color(0xFFD4AF37),
-          width: 2,
-        ),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Text(
-            'REPETIR\nTICKET',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontFamily: 'DinNextLtPro',
-              color: Color(0xFFD4AF37),
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
-              height: 1.1,
-            ),
+    final hasNumber = _repeatInput.isNotEmpty;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: () => _openRepeatNumpad(state),
+        child: Container(
+          width: 170,
+          height: 56,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1B1B1B),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFD4AF37), width: 1.5),
           ),
-          const SizedBox(height: 8),
-          SizedBox(
-            height: 38,
-            child: TextField(
-              controller: _repeatTicketController,
-              textAlign: TextAlign.center,
-              keyboardType: TextInputType.number,
-              style: const TextStyle(
-                fontFamily: 'DinNextLtPro',
-                color: Colors.white,
-                fontSize: 14,
-              ),
-              decoration: InputDecoration(
-                isDense: true,
-                hintText: 'N° / ID',
-                hintStyle: const TextStyle(color: Colors.white38, fontSize: 12),
-                filled: true,
-                fillColor: Colors.black26,
-                contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(6),
-                  borderSide: BorderSide.none,
+          child: Row(
+            children: [
+              const Icon(Icons.dialpad, color: Color(0xFFD4AF37), size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'REPETIR TICKET',
+                      style: TextStyle(
+                        fontFamily: 'DinNextLtPro',
+                        color: Color(0xFFD4AF37),
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        height: 1.1,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.black26,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        hasNumber ? _repeatInput : 'N° / ID',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontFamily: 'DinNextLtPro',
+                          color: hasNumber ? Colors.white : Colors.white38,
+                          fontSize: hasNumber ? 13 : 10,
+                          fontWeight: hasNumber ? FontWeight.bold : FontWeight.normal,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              onSubmitted: (_) => _loadTicketById(state),
-            ),
+            ],
           ),
-          const SizedBox(height: 6),
-          MouseRegion(
-            cursor: SystemMouseCursors.click,
-            child: GestureDetector(
-              onTap: () => _loadTicketById(state),
-              child: const Icon(
-                Icons.replay,
-                color: Color(0xFFD4AF37),
-                size: 24,
+        ),
+      ),
+    );
+  }
+
+  // Botón para confirmar la jugada en curso (selección + monto) y sumarla al ticket
+  Widget _buildAddPlayButton(PosState state) {
+    final ready = state.canSell && state.hasPendingPlay;
+    return Semantics(
+      label: 'Agregar jugada al ticket',
+      button: true,
+      child: MouseRegion(
+        cursor: ready ? SystemMouseCursors.click : SystemMouseCursors.basic,
+        child: GestureDetector(
+          onTap: ready ? state.addPlayToTicket : null,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            width: 145,
+            height: 145,
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: ready ? const Color(0xFFD4AF37) : const Color(0xFF1B1B1B),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: ready ? const Color(0xFFD4AF37) : Colors.white24,
+                width: 2,
               ),
             ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.add_circle_outline,
+                  color: ready ? Colors.black : Colors.white38,
+                  size: 42,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'AGREGAR\nJUGADA',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: 'DinNextLtPro',
+                    color: ready ? Colors.black : Colors.white38,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    height: 1.1,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -213,18 +251,24 @@ class _JugadaScreenState extends State<JugadaScreen> {
   @override
   void dispose() {
     widget.state.removeListener(_onStateChanged);
-    _repeatTicketController.dispose();
     super.dispose();
   }
 
   void _onStateChanged() {
-    if (mounted) {
-      final newLength = widget.state.currentTicketPlays.length;
-      if (newLength != _lastTicketLength) {
-        setState(() {
-          _lastTicketLength = newLength;
-        });
-      }
+    if (!mounted) return;
+    final newLength = widget.state.currentTicketPlays.length;
+    if (newLength != _lastTicketLength) {
+      setState(() { _lastTicketLength = newLength; });
+    }
+    // Mostrar error si las cuotas no se pudieron cargar
+    final err = widget.state.oddsLoadError;
+    if (err != null) {
+      widget.state.clearOddsLoadError();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        backgroundColor: const Color(0xFFE53935),
+        duration: const Duration(seconds: 4),
+        content: Text(err, style: const TextStyle(fontFamily: 'DinNextLtPro', fontWeight: FontWeight.bold, fontSize: 15)),
+      ));
     }
   }
 
@@ -236,7 +280,7 @@ class _JugadaScreenState extends State<JugadaScreen> {
       children: [
         // Main Board Content
         Container(
-          padding: const EdgeInsets.symmetric(vertical: 16.0),
+          padding: const EdgeInsets.only(top: 16.0, bottom: 28.0),
           child: Column(
             children: [
               const Spacer(flex: 1),
@@ -271,28 +315,31 @@ class _JugadaScreenState extends State<JugadaScreen> {
                             Expanded(
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: List.generate(8, (index) {
+                                children: List.generate(kDogCount, (index) {
                                   final dogNum = index + 1;
                                   final info = _dogInfo[dogNum]!;
-                                  final isSelected = state.selectedDog1 == dogNum;
-                                  final isDimmed = state.selectedDog1 != null;
+                                  final isSelected = state.selectedDogs1.contains(dogNum);
+                                  final isDimmed = state.selectedDogs1.isNotEmpty;
                                   return DogOddsCard(
                                     number: dogNum,
                                     name: info['name']!,
                                     color: info['color']!,
                                     ganarOdds: state.getGanarOdds(dogNum),
                                     exactaOdds: state.getExactaOdds(dogNum),
+                                    trifectaOdds: state.getTrifectaOdds(dogNum),
                                     width: 165,
                                     isSelected: isSelected,
                                     isDimmed: isDimmed,
-                                    onTap: () => state.selectDog1(dogNum),
+                                    onTap: state.canSell
+                                        ? () => state.selectDog1(dogNum)
+                                        : null,
                                   );
                                 }),
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 50),
+                        const SizedBox(height: 24),
 
                         // 2° Lugar Row
                         Row(
@@ -314,7 +361,7 @@ class _JugadaScreenState extends State<JugadaScreen> {
                             Expanded(
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: List.generate(8, (index) {
+                                children: List.generate(kDogCount, (index) {
                                   final dogNum = index + 1;
                                   final info = _dogInfo[dogNum]!;
                                   final isSelected = state.selectedDog2 == dogNum;
@@ -325,16 +372,66 @@ class _JugadaScreenState extends State<JugadaScreen> {
                                     color: info['color']!,
                                     ganarOdds: state.getGanarOdds(dogNum),
                                     exactaOdds: state.getExactaOdds(dogNum),
+                                    trifectaOdds: state.getTrifectaOdds(dogNum),
                                     width: 165,
                                     isSelected: isSelected,
                                     isDimmed: isDimmed,
-                                    onTap: () => state.selectDog2(dogNum),
+                                    onTap: state.canSell
+                                        ? () => state.selectDog2(dogNum)
+                                        : null,
                                   );
                                 }),
                               ),
                             ),
                           ],
                         ),
+                        // 3° Lugar Row — solo en la build con TRIFECTA habilitada
+                        if (kTrifectaEnabled) ...[
+                          const SizedBox(height: 24),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              const SizedBox(
+                                width: 100,
+                                child: Text(
+                                  '3°',
+                                  style: TextStyle(
+                                    fontFamily: 'DinNextLtPro',
+                                    color: Colors.white,
+                                    fontSize: 76,
+                                    fontWeight: FontWeight.bold,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: List.generate(kDogCount, (index) {
+                                    final dogNum = index + 1;
+                                    final info = _dogInfo[dogNum]!;
+                                    final isSelected = state.selectedDog3 == dogNum;
+                                    final isDimmed = state.selectedDog3 != null;
+                                    return DogOddsCard(
+                                      number: dogNum,
+                                      name: info['name']!,
+                                      color: info['color']!,
+                                      ganarOdds: state.getGanarOdds(dogNum),
+                                      exactaOdds: state.getExactaOdds(dogNum),
+                                      trifectaOdds: state.getTrifectaOdds(dogNum),
+                                      width: 165,
+                                      isSelected: isSelected,
+                                      isDimmed: isDimmed,
+                                      onTap: state.canSell
+                                          ? () => state.selectDog3(dogNum)
+                                          : null,
+                                    );
+                                  }),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -346,13 +443,13 @@ class _JugadaScreenState extends State<JugadaScreen> {
                       Row(
                         children: [
                           ActionButton(
-                            onTap: state.playReverse,
+                            onTap: state.canSell ? state.playReverse : null,
                             semanticLabel: 'Jugada reversa: agrega también la combinación 2°/1°',
                             child: Image.asset('assets/resources/felchaarribaabajo.png'),
                           ),
                           const SizedBox(width: 20),
                           ActionButton(
-                            onTap: state.playAllCombinations,
+                            onTap: state.canSell ? state.playAllCombinations : null,
                             semanticLabel: 'Combina el perro de 1° lugar con todos los demás en 2°',
                             child: Image.asset('assets/resources/flechadelado.png'),
                           ),
@@ -362,13 +459,13 @@ class _JugadaScreenState extends State<JugadaScreen> {
                       Row(
                         children: [
                           ActionButton(
-                            onTap: state.playR,
+                            onTap: state.canSell ? state.playR : null,
                             semanticLabel: 'Jugada R: combina con todos los perros en ambos sentidos, total \$350',
                             child: Image.asset('assets/resources/imagen_r.png'),
                           ),
                           const SizedBox(width: 20),
                           ActionButton(
-                            onTap: state.playR2,
+                            onTap: state.canSell ? state.playR2 : null,
                             semanticLabel: 'Jugada R/2: igual que R pero a mitad de precio, total \$175',
                             child: Image.asset('assets/resources/imagen_r2.png'),
                           ),
@@ -474,9 +571,20 @@ class _JugadaScreenState extends State<JugadaScreen> {
                                                 ),
                                               ),
                                             )
+                                          else if (state.selectedDogs1.length > 1)
+                                            Text(
+                                              'SELECCIÓN: ${(state.selectedDogs1.toList()..sort()).join(", ")}',
+                                              style: const TextStyle(
+                                                fontFamily: 'DinNextLtPro',
+                                                color: Colors.white,
+                                                fontSize: 22,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            )
                                           else if (state.selectedDog1 != null && state.selectedDog2 != null)
                                             Text(
-                                              'JUGADA: ${state.selectedDog1} - ${state.selectedDog2}',
+                                              'JUGADA: ${state.selectedDog1} - ${state.selectedDog2}'
+                                              '${state.selectedDog3 != null ? " - ${state.selectedDog3}" : ""}',
                                               style: const TextStyle(
                                                 fontFamily: 'DinNextLtPro',
                                                 color: Colors.white,
@@ -536,15 +644,27 @@ class _JugadaScreenState extends State<JugadaScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.start,
                       children: [
-                        AmountButton(amount: 25, onTap: () => state.addBetAmount(25)),
+                        AmountButton(
+                          amount: 25,
+                          onTap: state.canSell ? () => state.addBetAmount(25) : () {},
+                        ),
                         const SizedBox(width: 20),
-                        AmountButton(amount: 50, onTap: () => state.addBetAmount(50)),
+                        AmountButton(
+                          amount: 50,
+                          onTap: state.canSell ? () => state.addBetAmount(50) : () {},
+                        ),
                         const SizedBox(width: 20),
-                        AmountButton(amount: 100, onTap: () => state.addBetAmount(100)),
+                        AmountButton(
+                          amount: 100,
+                          onTap: state.canSell ? () => state.addBetAmount(100) : () {},
+                        ),
                         const SizedBox(width: 20),
-                        AmountButton(amount: 200, onTap: () => state.addBetAmount(200)),
+                        AmountButton(
+                          amount: 200,
+                          onTap: state.canSell ? () => state.addBetAmount(200) : () {},
+                        ),
                         const SizedBox(width: 20),
-                        _buildRepeatTicketBox(state),
+                        _buildAddPlayButton(state),
                       ],
                     ),
                   ),
@@ -602,7 +722,7 @@ class _JugadaScreenState extends State<JugadaScreen> {
                           onEnter: (_) => setState(() => _isPrintHovered = true),
                           onExit: (_) => setState(() => _isPrintHovered = false),
                           child: GestureDetector(
-                            onTap: _sellTicket,
+                            onTap: () => _handlePrintTicket(state),
                             onTapDown: (_) => setState(() => _isPrintPressed = true),
                             onTapUp: (_) => setState(() => _isPrintPressed = false),
                             onTapCancel: () => setState(() => _isPrintPressed = false),
@@ -634,6 +754,13 @@ class _JugadaScreenState extends State<JugadaScreen> {
               ),
             ],
           ),
+        ),
+
+        // Repetir ticket — flotante encima del botón de imprimir
+        Positioned(
+          right: 24,
+          bottom: 244,
+          child: _buildRepeatTicketBox(state),
         ),
 
         // Sliding Ticket Drawer (State 2 - OPEN)
@@ -808,6 +935,14 @@ class _JugadaScreenState extends State<JugadaScreen> {
                                           fit: BoxFit.contain,
                                         ),
                                       ],
+                                      if (play.dog3 != null) ...[
+                                        const SizedBox(width: 6),
+                                        Image.asset(
+                                          'assets/resources/botonnumero${play.dog3}.png',
+                                          height: 38,
+                                          fit: BoxFit.contain,
+                                        ),
+                                      ],
                                     ],
                                   ),
                                   const Spacer(),
@@ -923,7 +1058,7 @@ class _JugadaScreenState extends State<JugadaScreen> {
                           onExit: (_) => setState(() => _isPrintHovered = false),
                           child: GestureDetector(
                             onTap: () {
-                              _sellTicket();
+                              _handlePrintTicket(state);
                               setState(() {
                                 _isTicketOpen = false;
                               });
@@ -960,7 +1095,237 @@ class _JugadaScreenState extends State<JugadaScreen> {
             ),
           ),
         ),
+
+        // Aviso: POS bloqueado por límite (prioridad) o ventas cerradas
+        if (!state.canSell)
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: IgnorePointer(
+              child: Container(
+                width: double.infinity,
+                color: state.salesBlocked
+                    ? const Color(0xFFB71C1C)
+                    : const Color(0xFFD32F2F),
+                padding: const EdgeInsets.symmetric(vertical: 6.0),
+                alignment: Alignment.center,
+                child: Text(
+                  state.salesBlocked
+                      ? 'POS BLOQUEADO — LÍMITE ALCANZADO. AVISE AL SUPERVISOR'
+                      : 'VENTAS CERRADAS PARA ESTA CARRERA',
+                  style: const TextStyle(
+                    fontFamily: 'DinNextLtPro',
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 2,
+                  ),
+                ),
+              ),
+            ),
+          ),
       ],
+    );
+  }
+}
+
+// ── Diálogo teclado numérico para REPETIR TICKET ──────────────────────────────
+
+class _RepeatTicketDialog extends StatefulWidget {
+  final String initial;
+  const _RepeatTicketDialog({required this.initial});
+
+  @override
+  State<_RepeatTicketDialog> createState() => _RepeatTicketDialogState();
+}
+
+class _RepeatTicketDialogState extends State<_RepeatTicketDialog> {
+  late String _value;
+
+  @override
+  void initState() {
+    super.initState();
+    _value = widget.initial;
+  }
+
+  void _type(String d) {
+    if (_value.length < 8) setState(() => _value += d);
+  }
+
+  void _backspace() {
+    if (_value.isNotEmpty) setState(() => _value = _value.substring(0, _value.length - 1));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: const Color(0xFF0D1F14),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: SizedBox(
+        width: 340,
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'REPETIR TICKET',
+                style: TextStyle(color: Color(0xFFD4AF37), fontFamily: 'DinNextLtPro', fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.5),
+              ),
+              const SizedBox(height: 16),
+              // Display
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.4),
+                  border: Border.all(color: const Color(0xFFD4AF37).withOpacity(0.5)),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  _value.isEmpty ? '—' : _value,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: _value.isEmpty ? Colors.white30 : Colors.white,
+                    fontFamily: 'DinNextLtPro',
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 4,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              // Numpad
+              SizedBox(height: 260, child: _NumPad(onDigit: _type, onBackspace: _backspace)),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancelar', style: TextStyle(color: Colors.white54, fontFamily: 'DinNextLtPro', fontSize: 16)),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 2,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFD4AF37),
+                        foregroundColor: Colors.black,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      onPressed: _value.isEmpty ? null : () => Navigator.pop(context, _value),
+                      child: const Text('BUSCAR', style: TextStyle(fontFamily: 'DinNextLtPro', fontWeight: FontWeight.bold, fontSize: 16)),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NumPad extends StatelessWidget {
+  final ValueChanged<String> onDigit;
+  final VoidCallback onBackspace;
+  const _NumPad({required this.onDigit, required this.onBackspace});
+
+  @override
+  Widget build(BuildContext context) {
+    const sp = 14.0;
+    return Column(
+      children: [
+        Expanded(child: Row(children: [
+          Expanded(child: _NumKey(label: '1', onTap: () => onDigit('1'))),
+          const SizedBox(width: sp),
+          Expanded(child: _NumKey(label: '2', onTap: () => onDigit('2'))),
+          const SizedBox(width: sp),
+          Expanded(child: _NumKey(label: '3', onTap: () => onDigit('3'))),
+        ])),
+        const SizedBox(height: sp),
+        Expanded(child: Row(children: [
+          Expanded(child: _NumKey(label: '4', onTap: () => onDigit('4'))),
+          const SizedBox(width: sp),
+          Expanded(child: _NumKey(label: '5', onTap: () => onDigit('5'))),
+          const SizedBox(width: sp),
+          Expanded(child: _NumKey(label: '6', onTap: () => onDigit('6'))),
+        ])),
+        const SizedBox(height: sp),
+        Expanded(child: Row(children: [
+          Expanded(child: _NumKey(label: '7', onTap: () => onDigit('7'))),
+          const SizedBox(width: sp),
+          Expanded(child: _NumKey(label: '8', onTap: () => onDigit('8'))),
+          const SizedBox(width: sp),
+          Expanded(child: _NumKey(label: '9', onTap: () => onDigit('9'))),
+        ])),
+        const SizedBox(height: sp),
+        Expanded(child: Row(children: [
+          Expanded(flex: 2, child: _NumKey(icon: Icons.backspace_outlined, highlighted: true, onTap: onBackspace)),
+          const SizedBox(width: sp),
+          Expanded(child: _NumKey(label: '0', onTap: () => onDigit('0'))),
+        ])),
+      ],
+    );
+  }
+}
+
+class _NumKey extends StatefulWidget {
+  final String? label;
+  final IconData? icon;
+  final bool highlighted;
+  final VoidCallback onTap;
+  const _NumKey({this.label, this.icon, this.highlighted = false, required this.onTap});
+
+  @override
+  State<_NumKey> createState() => _NumKeyState();
+}
+
+class _NumKeyState extends State<_NumKey> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final BoxDecoration deco;
+    final Color contentColor;
+    if (widget.highlighted) {
+      deco = BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: _pressed
+              ? [const Color(0xFFE6C75B), const Color(0xFFB8902C)]
+              : [const Color(0xFFD4AF37), const Color(0xFFA67C1F)],
+        ),
+        borderRadius: BorderRadius.circular(10),
+      );
+      contentColor = const Color(0xFF12241A);
+    } else {
+      deco = BoxDecoration(
+        color: Colors.white.withOpacity(_pressed ? 0.12 : 0.05),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFD4AF37).withOpacity(_pressed ? 0.7 : 0.35), width: 1.5),
+      );
+      contentColor = Colors.white;
+    }
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) { setState(() => _pressed = false); widget.onTap(); },
+      onTapCancel: () => setState(() => _pressed = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 80),
+        decoration: deco,
+        child: Center(
+          child: widget.icon != null
+              ? Icon(widget.icon, color: contentColor, size: 22)
+              : Text(widget.label!, style: TextStyle(color: contentColor, fontFamily: 'DinNextLtPro', fontSize: 24, fontWeight: FontWeight.bold)),
+        ),
+      ),
     );
   }
 }

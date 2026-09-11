@@ -2,11 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:pos/layouts/desktop_layout.dart';
 
 class LoginScreen extends StatefulWidget {
-  /// Recibe el número de acceso y el PIN tecleados. Devuelve `null` si el
-  /// login fue correcto, o el mensaje de error a mostrar en pantalla.
-  final Future<String?> Function(String account, String password) onAccess;
+  final Future<String?> Function(String username, String password) onLogin;
+  final Future<String?> Function(String pin)? onUnlock;
+  final String lockedUsername;
+  final bool isLocked;
 
-  const LoginScreen({super.key, required this.onAccess});
+  const LoginScreen({
+    super.key,
+    required this.onLogin,
+    this.onUnlock,
+    this.lockedUsername = '',
+    this.isLocked = false,
+  });
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -14,40 +21,75 @@ class LoginScreen extends StatefulWidget {
 
 enum _ActiveField { account, password }
 
+// El número de acceso puede tener entre 8 y 12 dígitos (cuentas nuevas de 8,
+// cuentas antiguas de hasta 12). El formato con guiones debe coincidir con el
+// que genera el admin al crear el usuario.
+const int _accountMinDigits = 8;
+const int _accountMaxDigits = 12;
+
 class _LoginScreenState extends State<LoginScreen> {
   String _account = '';
   String _password = '';
   _ActiveField _active = _ActiveField.account;
+  bool _isLoading = false;
   String? _error;
-  bool _loading = false;
-
-  Future<void> _submit() async {
-    if (_loading) return;
-    if (_account.isEmpty || _password.isEmpty) {
-      setState(() => _error = 'Escribe tu número de acceso y tu PIN');
-      return;
-    }
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    final error = await widget.onAccess(_account, _password);
-    if (!mounted) return;
-    setState(() {
-      _loading = false;
-      _error = error;
-      if (error != null) _password = '';
-    });
-  }
 
   void _typeDigit(String digit) {
     setState(() {
       if (_active == _ActiveField.account) {
-        _account += digit;
+        if (_account.length < _accountMaxDigits) {
+          _account += digit;
+        }
       } else {
         _password += digit;
       }
     });
+  }
+
+  String get _formattedAccount {
+    final buffer = StringBuffer();
+    for (int i = 0; i < _account.length; i++) {
+      if (i > 0 && i % 3 == 0) buffer.write('-');
+      buffer.write(_account[i]);
+    }
+    return buffer.toString();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // Si está bloqueado, ir directo al campo PIN
+    if (widget.isLocked) {
+      _active = _ActiveField.password;
+    }
+  }
+
+  Future<void> _handleAccess() async {
+    // Modo desbloqueo: solo valida el PIN con el usuario guardado
+    if (widget.isLocked && widget.onUnlock != null) {
+      if (_password.isEmpty) {
+        setState(() => _error = 'Ingresa tu PIN.');
+        return;
+      }
+      setState(() { _isLoading = true; _error = null; });
+      final result = await widget.onUnlock!(_password);
+      if (!mounted) return;
+      setState(() { _isLoading = false; _error = result; });
+      return;
+    }
+
+    // Modo login normal
+    if (_account.length < _accountMinDigits || _password.isEmpty) {
+      setState(() {
+        _error = 'Complete el número de acceso (8 a 12 dígitos) y el PIN.';
+      });
+      return;
+    }
+
+    setState(() { _isLoading = true; _error = null; });
+    final result = await widget.onLogin(_formattedAccount, _password);
+    if (!mounted) return;
+    setState(() { _isLoading = false; _error = result; });
   }
 
   void _backspace() {
@@ -119,6 +161,33 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
           ),
+          // Banner de sesión bloqueada
+          if (widget.isLocked)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                color: const Color(0xFFB8860B).withOpacity(0.92),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.lock_clock, color: Colors.white, size: 22),
+                    SizedBox(width: 12),
+                    Text(
+                      'SESIÓN BLOQUEADA POR INACTIVIDAD — Vuelva a ingresar su PIN',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           // Contenido principal
           Padding(
             padding: const EdgeInsets.fromLTRB(90, 30, 90, 240),
@@ -136,24 +205,52 @@ class _LoginScreenState extends State<LoginScreen> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const _FieldLabel('NÚMERO DE ACCESO'),
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: _LoginField(
-                                    text: _account,
-                                    isPassword: false,
-                                    isActive: _active == _ActiveField.account,
-                                    onTap: () => setState(
-                                      () => _active = _ActiveField.account,
+                            // Modo bloqueo: mostrar usuario guardado, no el campo de cuenta
+                            if (widget.isLocked) ...[
+                              const _FieldLabel('USUARIO'),
+                              const SizedBox(height: 12),
+                              Container(
+                                height: 56,
+                                padding: const EdgeInsets.symmetric(horizontal: 20),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF1B2E20),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: const Color(0xFFD4AF37).withOpacity(0.5)),
+                                ),
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    widget.lockedUsername,
+                                    style: const TextStyle(
+                                      fontFamily: 'DinNextLtPro',
+                                      color: Color(0xFFD4AF37),
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 1.5,
                                     ),
                                   ),
                                 ),
-                                const SizedBox(width: 20),
-                                _ClearButton(onTap: _clearAccount),
-                              ],
-                            ),
+                              ),
+                            ] else ...[
+                              const _FieldLabel('NÚMERO DE ACCESO'),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _LoginField(
+                                      text: _formattedAccount,
+                                      isPassword: false,
+                                      isActive: _active == _ActiveField.account,
+                                      onTap: () => setState(
+                                        () => _active = _ActiveField.account,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 20),
+                                  _ClearButton(onTap: _clearAccount),
+                                ],
+                              ),
+                            ],
                             const SizedBox(height: 36),
                             const _FieldLabel('PIN DE ACCESO'),
                             const SizedBox(height: 12),
@@ -173,21 +270,20 @@ class _LoginScreenState extends State<LoginScreen> {
                                 _ClearButton(onTap: _clearPassword),
                               ],
                             ),
-                            if (_error != null) ...[
-                              const SizedBox(height: 20),
+                            const SizedBox(height: 16),
+                            if (_error != null)
                               Text(
                                 _error!,
                                 style: const TextStyle(
-                                  color: Color(0xFFFF6B6B),
-                                  fontSize: 18,
+                                  color: Color(0xFFE57373),
+                                  fontSize: 15,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                            ],
-                            const SizedBox(height: 56),
+                            const SizedBox(height: 16),
                             _AccesoButton(
-                              onTap: _submit,
-                              isLoading: _loading,
+                              onTap: _isLoading ? null : _handleAccess,
+                              isLoading: _isLoading,
                             ),
                           ],
                         ),
@@ -339,7 +435,7 @@ class _ClearButtonState extends State<_ClearButton> {
 }
 
 class _AccesoButton extends StatefulWidget {
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final bool isLoading;
 
   const _AccesoButton({required this.onTap, this.isLoading = false});
@@ -358,7 +454,7 @@ class _AccesoButtonState extends State<_AccesoButton> {
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
       child: GestureDetector(
-        onTap: widget.isLoading ? null : widget.onTap,
+        onTap: widget.onTap,
         child: Row(
           children: [
             // Cuadro dorado con icono de candado
@@ -395,22 +491,22 @@ class _AccesoButtonState extends State<_AccesoButton> {
                 ),
                 child: widget.isLoading
                     ? const SizedBox(
-                        width: 30,
-                        height: 30,
+                        width: 28,
+                        height: 28,
                         child: CircularProgressIndicator(
                           strokeWidth: 3,
                           color: Color(0xFFD4AF37),
                         ),
                       )
                     : const Text(
-                  'ACCESO',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 6,
-                  ),
-                ),
+                        'ACCESO',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 6,
+                        ),
+                      ),
               ),
             ),
           ],

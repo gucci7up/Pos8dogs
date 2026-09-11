@@ -6,6 +6,7 @@ class DogOddsCard extends StatefulWidget {
   final String color;
   final double ganarOdds;
   final double exactaOdds;
+  final double trifectaOdds;
   final bool isSelected;
   final bool isDimmed;
   final VoidCallback? onTap;
@@ -18,6 +19,7 @@ class DogOddsCard extends StatefulWidget {
     required this.color,
     required this.ganarOdds,
     required this.exactaOdds,
+    required this.trifectaOdds,
     this.isSelected = false,
     this.isDimmed = false,
     this.onTap,
@@ -38,13 +40,13 @@ class _DogOddsCardState extends State<DogOddsCard> {
       opacity = 0.3;
     }
 
-    final s = widget.width / 180;
+    final s = widget.width / 220;
 
     final card = Opacity(
       opacity: opacity,
       child: Container(
         width: widget.width,
-        padding: EdgeInsets.all(10 * s),
+        clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: const Color(0xFF1B1B1B),
           borderRadius: BorderRadius.circular(10),
@@ -65,59 +67,67 @@ class _DogOddsCardState extends State<DogOddsCard> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Number badge + name/color
-            Row(
+            // Dog photo con número badge más grande
+            Stack(
               children: [
-                Image.asset(
-                  'assets/resources/botonnumero${widget.number}.png',
-                  height: 58 * s,
-                  fit: BoxFit.contain,
+                // Espacio reservado para el badge arriba + imagen del perro debajo
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(height: 28 * s), // espacio para el badge
+                    Container(
+                      height: 110 * s,
+                      width: double.infinity,
+                      alignment: Alignment.center,
+                      child: Image.asset(
+                        'assets/resources/dog_${widget.number}.png',
+                        height: 110 * s,
+                        width: double.infinity,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                  ],
                 ),
-                SizedBox(width: 8 * s),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        widget.name,
-                        style: TextStyle(
-                          fontFamily: 'DinNextLtPro',
-                          color: Colors.white,
-                          fontSize: 16 * s,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Text(
-                        widget.color,
-                        style: TextStyle(
-                          fontFamily: 'DinNextLtPro',
-                          color: Colors.white60,
-                          fontSize: 12 * s,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
+                // Badge del número encima, en la esquina superior izquierda
+                Positioned(
+                  left: 6 * s,
+                  top: 0,
+                  child: Image.asset(
+                    'assets/resources/botonnumero${widget.number}.png',
+                    height: 54 * s,
+                    fit: BoxFit.contain,
                   ),
                 ),
               ],
             ),
-            SizedBox(height: 8 * s),
-            // Dog photo
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Image.asset(
-                'assets/resources/dog_${widget.number}.png',
-                height: 90 * s,
-                width: double.infinity,
-                fit: BoxFit.cover,
+            // Nombre del perro
+            Padding(
+              padding: EdgeInsets.fromLTRB(10 * s, 6 * s, 10 * s, 8 * s),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.name,
+                    style: TextStyle(
+                      fontFamily: 'DinNextLtPro',
+                      color: Colors.white,
+                      fontSize: 18 * s,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    widget.color,
+                    style: TextStyle(
+                      fontFamily: 'DinNextLtPro',
+                      color: Colors.white60,
+                      fontSize: 12 * s,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
               ),
             ),
-            SizedBox(height: 8 * s),
-            // Odds rows
-            _oddsRow('GANAR', widget.ganarOdds, s),
-            SizedBox(height: 4 * s),
-            _oddsRow('EXACTA', widget.exactaOdds, s),
           ],
         ),
       ),
@@ -149,37 +159,4 @@ class _DogOddsCardState extends State<DogOddsCard> {
     );
   }
 
-  Widget _oddsRow(String label, double value, double s) {
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.symmetric(horizontal: 8 * s, vertical: 4 * s),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.06),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontFamily: 'DinNextLtPro',
-              color: const Color(0xFFD4AF37),
-              fontSize: 13 * s,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          Text(
-            value.toStringAsFixed(2),
-            style: TextStyle(
-              fontFamily: 'DinNextLtPro',
-              color: Colors.white,
-              fontSize: 13 * s,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }

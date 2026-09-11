@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -8,6 +9,10 @@ import 'package:pos/screens/jugada_screen.dart';
 import 'package:pos/screens/resultados_screen.dart';
 import 'package:pos/screens/cuotas_screen.dart';
 import 'package:pos/screens/ventas_screen.dart';
+import 'package:pos/screens/tickets_screen.dart';
+import 'package:pos/screens/premios_screen.dart';
+import 'package:pos/services/api_client.dart';
+import 'package:pos/services/session_store.dart';
 import 'package:pos/state/pos_state.dart';
 
 void main() async {
@@ -17,19 +22,17 @@ void main() async {
     await windowManager.ensureInitialized();
 
     WindowOptions windowOptions = const WindowOptions(
-      size: Size(1920, 1080),
-      minimumSize: Size(1024, 768),
+      size: Size(1280, 768),
+      minimumSize: Size(800, 600),
       center: true,
       backgroundColor: Colors.transparent,
       skipTaskbar: false,
-      titleBarStyle:
-          TitleBarStyle.hidden, // sin bordes; barra propia en DesktopLayout
+      titleBarStyle: TitleBarStyle.hidden,
     );
 
     windowManager.waitUntilReadyToShow(windowOptions, () async {
       await windowManager.show();
       await windowManager.focus();
-      await windowManager.maximize();
     });
   }
 
@@ -42,7 +45,7 @@ class RacingDogsApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Racing Dogs POS',
+      title: 'MBSport DS8 POS',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         fontFamily: 'DinNextLtPro',
@@ -66,38 +69,152 @@ class RootScreen extends StatefulWidget {
 }
 
 class _RootScreenState extends State<RootScreen> {
-  /// El estado vive aquí (no dentro de MainScreen) porque el login es quien
-  /// obtiene el token y arranca el sondeo al backend.
-  final PosState _state = PosState();
-  bool _loggedIn = false;
+  final ApiClient _apiClient = ApiClient();
+  AuthResult? _auth;
+  bool _sessionLocked = false;
+  bool _restoring = true; // reanudando sesión guardada al abrir la app
+  Timer? _inactivityTimer;
+
+  static const _inactivityTimeout = Duration(hours: 8);
+
+  @override
+  void initState() {
+    super.initState();
+    _restoreSession();
+  }
+
+  // Reanuda la sesión guardada (si existe) iniciando sesión automáticamente.
+  Future<void> _restoreSession() async {
+    final creds = await SessionStore.read();
+    if (creds != null) {
+      try {
+        final auth = await _apiClient.login(creds.username, creds.password);
+        if (mounted) {
+          setState(() {
+            _auth = auth;
+            _sessionLocked = false;
+          });
+          _resetInactivityTimer();
+        }
+      } catch (_) {
+        // Credenciales inválidas u offline: se muestra el login normal.
+        // No se borran las credenciales para reintentar en el próximo arranque.
+      }
+    }
+    if (mounted) setState(() => _restoring = false);
+  }
 
   @override
   void dispose() {
-    _state.dispose();
+    _inactivityTimer?.cancel();
     super.dispose();
   }
 
-  Future<String?> _handleLogin(String account, String password) async {
-    final error = await _state.login(account, password);
-    if (error == null && mounted) {
-      setState(() => _loggedIn = true);
+  void _resetInactivityTimer() {
+    _inactivityTimer?.cancel();
+    if (_auth != null && !_sessionLocked) {
+      _inactivityTimer = Timer(_inactivityTimeout, _lockSession);
     }
-    return error;
+  }
+
+  void _lockSession() {
+    if (!mounted) return;
+    _inactivityTimer?.cancel();
+    setState(() => _sessionLocked = true);
+  }
+
+  Future<String?> _handleLogin(String username, String password) async {
+    try {
+      final auth = await _apiClient.login(username, password);
+      // Guardar credenciales para reanudar la sesión en próximos arranques.
+      await SessionStore.save(username, password);
+      setState(() {
+        _auth = auth;
+        _sessionLocked = false;
+      });
+      _resetInactivityTimer();
+      return null;
+    } on ApiException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'No se pudo conectar con el servidor';
+    }
+  }
+
+  // Desbloqueo: usa el username guardado, solo pide el PIN
+  Future<String?> _handleUnlock(String pin) async {
+    final username = _auth?.username;
+    if (username == null) return 'Sesión inválida';
+    return _handleLogin(username, pin);
+  }
+
+  void _handleLogout() {
+    _inactivityTimer?.cancel();
+    _apiClient.setToken(null);
+    // Al cerrar sesión explícitamente se olvidan las credenciales guardadas.
+    unawaited(SessionStore.clear());
+    setState(() {
+      _auth = null;
+      _sessionLocked = false;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!_loggedIn) {
-      return LoginScreen(onAccess: _handleLogin);
+    // Reanudando sesión guardada: splash mientras se resuelve el auto-login.
+    if (_restoring) {
+      return const Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(
+          child: CircularProgressIndicator(color: Color(0xFFD4AF37)),
+        ),
+      );
     }
-    return MainScreen(state: _state);
+
+    final auth = _auth;
+
+    // Sin sesión activa: pantalla de login pura
+    if (auth == null) {
+      return LoginScreen(onLogin: _handleLogin);
+    }
+
+    // Sesión activa: MainScreen siempre en el árbol (datos preservados).
+    // Cuando se bloquea, se superpone el LoginScreen como overlay.
+    return Listener(
+      onPointerDown: (_) => _resetInactivityTimer(),
+      onPointerMove: (_) => _resetInactivityTimer(),
+      child: Stack(
+        children: [
+          MainScreen(
+            key: ValueKey(auth.userId),
+            apiClient: _apiClient,
+            auth: auth,
+            onLogout: _handleLogout,
+          ),
+          if (_sessionLocked)
+            LoginScreen(
+              onLogin: _handleLogin,
+              onUnlock: _handleUnlock,
+              isLocked: true,
+              lockedUsername: _auth?.username ?? '',
+            ),
+        ],
+      ),
+    );
   }
 }
 
 class MainScreen extends StatefulWidget {
-  final PosState state;
+  final ApiClient apiClient;
+  final AuthResult auth;
+  final VoidCallback onLogout;
 
-  const MainScreen({super.key, required this.state});
+  const MainScreen({
+    super.key,
+    required this.apiClient,
+    required this.auth,
+    required this.onLogout,
+  });
 
   @override
   State<MainScreen> createState() => _MainScreenState();
@@ -105,8 +222,19 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _currentTabIndex = 0;
+  late final PosState _state;
 
-  PosState get _state => widget.state;
+  @override
+  void initState() {
+    super.initState();
+    _state = PosState(api: widget.apiClient, auth: widget.auth);
+  }
+
+  @override
+  void dispose() {
+    _state.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -128,6 +256,12 @@ class _MainScreenState extends State<MainScreen> {
           case 3:
             activeScreen = VentasScreen(state: _state);
             break;
+          case 4:
+            activeScreen = TicketsScreen(state: _state);
+            break;
+          case 5:
+            activeScreen = PremiosScreen(state: _state);
+            break;
           default:
             activeScreen = JugadaScreen(state: _state);
         }
@@ -140,6 +274,7 @@ class _MainScreenState extends State<MainScreen> {
             });
           },
           state: _state,
+          onLogout: widget.onLogout,
           child: activeScreen,
         );
       },

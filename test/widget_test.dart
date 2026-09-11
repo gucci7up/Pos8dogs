@@ -1,50 +1,48 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:pos/state/pos_state.dart';
+
+import 'package:pos/config/bet_mode.dart';
+import 'package:pos/config/dogs.dart';
 
 void main() {
-  test('formatAccount agrupa los digitos de a 3 como espera el backend', () {
-    expect(PosState.formatAccount('04171826'), '041-718-26');
-    expect(PosState.formatAccount('041718261234'), '041-718-261-234');
-  });
-
-  test('Bet traduce la jugada al contrato de la API', () {
-    final winner = Bet(dog1: 3, amount: 25, odds: 4.5);
-    expect(winner.betType, 'WINNER');
-    expect(winner.selection, '3');
-
-    final exacta = Bet(dog1: 3, dog2: 5, amount: 25, odds: 30.0);
-    expect(exacta.betType, 'EXACTA');
-    expect(exacta.selection, '3-5');
-  });
-
-  test('RaceResult toma solo las dos primeras posiciones del resultado', () {
-    final result = RaceResult.fromJson({
-      'numero': 12,
-      'resultado': '3-5-1-2-4-6-7-8',
-      'x2Dog': 4,
+  group('Configuración de la build DS8', () {
+    test('la carrera es de 8 perros', () {
+      expect(kDogCount, 8);
     });
-    expect(result.raceNumber, 12);
-    expect(result.winner1, 3);
-    expect(result.winner2, 5);
-    expect(result.bonus, 'x2');
-  });
 
-  test('Ticket.fromJson mapea detalles, estado y balance', () {
-    final ticket = Ticket.fromJson({
-      'id': 'abc',
-      'ticketNumber': 1042,
-      'status': 'WON',
-      'totalAmount': '50.00',
-      'prizeAmount': '120.00',
-      'createdAt': '2026-09-10T15:04:05.000Z',
-      'details': [
-        {'betType': 'EXACTA', 'selection': '3-5', 'amount': '50.00', 'odds': '2.40'},
-      ],
+    test('cada perro tiene nombre y color, sin huecos', () {
+      for (var dog = 1; dog <= kDogCount; dog++) {
+        final info = kDogInfo[dog];
+        expect(info, isNotNull, reason: 'falta el perro $dog');
+        expect(info!['name'], isNotEmpty);
+        expect(info['color'], isNotEmpty);
+      }
+      expect(kDogInfo.length, kDogCount);
     });
-    expect(ticket.ticketNumber, 1042);
-    expect(ticket.status, TicketStatus.winner);
-    expect(ticket.plays.single.dog1, 3);
-    expect(ticket.plays.single.dog2, 5);
-    expect(ticket.balance, 70.0);
+
+    test('todos los perros tienen color de barra propio', () {
+      final colors = <int, Color>{};
+      for (var dog = 1; dog <= kDogCount; dog++) {
+        colors[dog] = dogColor(dog);
+      }
+      expect(colors.length, kDogCount);
+      expect(colors[7], isNot(Colors.grey),
+          reason: 'el 7 debe tener color propio, no el de respaldo');
+      expect(colors[8], isNot(Colors.grey),
+          reason: 'el 8 debe tener color propio, no el de respaldo');
+    });
+
+    test('los perros de dos tonos se dibujan a rayas', () {
+      expect(isStripedDog(6), isTrue);
+      expect(isStripedDog(8), isTrue);
+      expect(isStripedDog(1), isFalse);
+      expect(stripedColors(8).length, 5);
+    });
+
+    test('DS8 vende solo GANADOR y EXACTA: sin tripleta', () {
+      // El backend de 8 perros no tiene el tipo TRIFECTA, así que una build
+      // por defecto con tripleta activa vendería algo que el servidor rechaza.
+      expect(kTrifectaEnabled, isFalse);
+    });
   });
 }
